@@ -71,7 +71,10 @@ backend/liquibase.properties
 *.lcov
 coverage/
 .nyc_output/
-*.html
 backend/build/reports/
 backend/build/test-results/
+backend/build/reports/tests/test/**/*.html
 frontend/coverage/
+
+# Allow the Vite entry HTML (excluded by the broader *.html pattern above)
+!frontend/index.html
