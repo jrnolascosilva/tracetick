@@ -37,6 +37,9 @@ dist/
 hs_err_pid*
 replay_pid*
 
+# Allow the Gradle wrapper jar (binary, required by gradlew)
+!backend/gradle/wrapper/gradle-wrapper.jar
+
 # Gradle
 .gradle/
 backend/.gradle/
