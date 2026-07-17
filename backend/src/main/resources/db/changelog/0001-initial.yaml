@@ -1,0 +1,9 @@
+databaseChangeLog:
+  - changeSet:
+      id: 0001-initial
+      author: tracetick
+      comment: Initial changelog. Establishes the Liquibase metadata baseline; entity tables are introduced in subsequent changesets.
+      changes:
+        - empty: {}
+      rollback:
+        - empty: {}

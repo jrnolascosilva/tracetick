@@ -1,0 +1,9 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/tracetick
+    username: tracetick
+    password: tracetick
+
+logging:
+  level:
+    com.tracetick: DEBUG

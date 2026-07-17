@@ -1,0 +1,20 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: tracetick-postgres
+    environment:
+      POSTGRES_DB: tracetick
+      POSTGRES_USER: tracetick
+      POSTGRES_PASSWORD: tracetick
+    ports:
+      - "5432:5432"
+    volumes:
+      - tracetick-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tracetick -d tracetick"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  tracetick-postgres-data:

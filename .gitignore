@@ -1,0 +1,80 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# IDEs
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+!.vscode/settings.json
+!.vscode/extensions.json
+.project
+.classpath
+.settings/
+*.swp
+*~
+
+# Logs
+*.log
+logs/
+backend/logs/
+
+# Build outputs
+target/
+build/
+out/
+dist/
+*.class
+*.jar
+*.war
+*.nar
+*.ear
+*.zip
+*.tar.gz
+*.rar
+hs_err_pid*
+replay_pid*
+
+# Allow the Gradle wrapper jar (binary, required by gradlew)
+!backend/gradle/wrapper/gradle-wrapper.jar
+
+# Gradle
+.gradle/
+backend/.gradle/
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+# Node
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Env / secrets
+.env
+.env.local
+.env.*.local
+backend/.env
+frontend/.env
+
+# Liquibase / Postgres
+backend/liquibase.properties
+
+# Coverage / reports
+*.lcov
+coverage/
+.nyc_output/
+backend/build/reports/
+backend/build/test-results/
+backend/build/reports/tests/test/**/*.html
+frontend/coverage/
+
+# Allow the Vite entry HTML (excluded by the broader *.html pattern above)
+!frontend/index.html
