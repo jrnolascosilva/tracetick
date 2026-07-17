@@ -1,0 +1,39 @@
+spring:
+  application:
+    name: tracetick
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/tracetick}
+    username: ${SPRING_DATASOURCE_USERNAME:tracetick}
+    password: ${SPRING_DATASOURCE_PASSWORD:tracetick}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+  liquibase:
+    change-log: classpath:db/changelog/db.changelog-master.yaml
+
+server:
+  port: ${SERVER_PORT:8080}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: when-authorized
+      probes:
+        enabled: true
+  health:
+    db:
+      enabled: true
+
+logging:
+  level:
+    com.tracetick: INFO
+    org.springframework.web: INFO
