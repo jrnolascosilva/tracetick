@@ -6,11 +6,13 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import lombok.Getter;
 
 import java.time.Instant;
 
 @Entity
 @Table(name = "customers")
+@Getter
 public class Customer {
 
     @Id
@@ -37,21 +39,5 @@ public class Customer {
 
     public static Customer create(String orgName, String contactEmail) {
         return new Customer(orgName, contactEmail, Instant.now());
-    }
-
-    public Long getId() {
-        return id;
-    }
-
-    public String getOrgName() {
-        return orgName;
-    }
-
-    public String getContactEmail() {
-        return contactEmail;
-    }
-
-    public Instant getCreatedAt() {
-        return createdAt;
     }
 }

@@ -11,11 +11,13 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import lombok.Getter;
 
 import java.time.Instant;
 
 @Entity
 @Table(name = "users")
+@Getter
 public class User {
 
     @Id
@@ -56,34 +58,6 @@ public class User {
 
     public static User create(Customer customer, String email, String passwordHash, Role role) {
         return new User(customer, email, passwordHash, role, true, Instant.now());
-    }
-
-    public Long getId() {
-        return id;
-    }
-
-    public Customer getCustomer() {
-        return customer;
-    }
-
-    public String getEmail() {
-        return email;
-    }
-
-    public String getPasswordHash() {
-        return passwordHash;
-    }
-
-    public Role getRole() {
-        return role;
-    }
-
-    public boolean isActive() {
-        return active;
-    }
-
-    public Instant getCreatedAt() {
-        return createdAt;
     }
 
     public void deactivate() {
