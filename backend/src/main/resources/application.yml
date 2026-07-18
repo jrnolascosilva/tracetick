@@ -38,6 +38,9 @@ tracetick:
     enabled: ${TRACETICK_BOOTSTRAP_ENABLED:true}
     admin-email: ${TRACETICK_BOOTSTRAP_ADMIN_EMAIL:admin@tracetick.local}
     admin-password: ${TRACETICK_BOOTSTRAP_ADMIN_PASSWORD:changeme}
+  auth:
+    password-reset:
+      token-ttl: ${TRACETICK_PASSWORD_RESET_TOKEN_TTL:PT1H}
 
 logging:
   level:
