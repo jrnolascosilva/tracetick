@@ -4,6 +4,10 @@ spring:
     username: tracetick
     password: tracetick
 
+tracetick:
+  bootstrap:
+    enabled: false
+
 logging:
   level:
     com.tracetick: DEBUG

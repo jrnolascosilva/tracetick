@@ -25,6 +25,7 @@ backend/logs/
 target/
 build/
 out/
+bin/
 dist/
 *.class
 *.jar

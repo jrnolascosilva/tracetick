@@ -1,15 +1,27 @@
-import { Outlet } from 'react-router-dom';
+import { Link, Outlet } from 'react-router-dom';
+
+import { useAuth } from '@/lib/auth';
 
 export function AppShell() {
+  const auth = useAuth();
+
   return (
     <div className="app-shell">
       <header className="app-header">
         <h1>TraceTick</h1>
         <nav>
-          <a href="/tickets">Tickets</a>
-          <a href="/ingestion-configurations">Ingestion</a>
-          <a href="/admin/users">Users</a>
+          <Link to="/tickets">Tickets</Link>
+          <Link to="/ingestion-configurations">Ingestion</Link>
+          {auth.user?.role === 'TECHNICIAN' && <Link to="/admin/users">Users</Link>}
         </nav>
+        <div className="app-header-user">
+          {auth.user && (
+            <>
+              <span>{auth.user.email}</span>
+              <button type="button" onClick={() => void auth.logout()}>Sign out</button>
+            </>
+          )}
+        </div>
       </header>
       <main>
         <Outlet />

@@ -33,6 +33,12 @@ management:
     db:
       enabled: true
 
+tracetick:
+  bootstrap:
+    enabled: ${TRACETICK_BOOTSTRAP_ENABLED:true}
+    admin-email: ${TRACETICK_BOOTSTRAP_ADMIN_EMAIL:admin@tracetick.local}
+    admin-password: ${TRACETICK_BOOTSTRAP_ADMIN_PASSWORD:changeme}
+
 logging:
   level:
     com.tracetick: INFO

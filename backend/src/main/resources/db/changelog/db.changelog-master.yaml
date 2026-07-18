@@ -1,3 +1,5 @@
 databaseChangeLog:
   - include:
       file: db/changelog/0001-initial.yaml
+  - include:
+      file: db/changelog/0002-customers-and-users.yaml
