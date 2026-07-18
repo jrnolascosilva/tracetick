@@ -7,7 +7,7 @@
 
 Provide an end-to-end password-reset flow for an unauthenticated User. A User requests a one-time token, confirms it with a new password, and then signs in through the existing login flow.
 
-The v1 notifications module remains a stub, so the request endpoint returns the raw token directly. This response behavior is suitable only for the v1 development flow and must be replaced by out-of-band delivery before production use.
+The v1 notifications module remains a stub, so the request endpoint returns the raw token directly. This response behavior is suitable only for the v1 development flow and must be replaced by out-of-band delivery before production use. Removing `token` from the response is a future API-contract change that must be tracked separately and versioned or coordinated with the frontend.
 
 ## Scope
 
@@ -16,7 +16,7 @@ The v1 notifications module remains a stub, so the request endpoint returns the 
 - BCrypt password replacement through User domain behavior.
 - Public `/password-reset` request and confirmation UI.
 - Backend HTTP acceptance tests and focused domain/service tests.
-- Frontend component tests using Vitest, React Testing Library, and MSW.
+- Frontend component tests using Vitest, React Testing Library, and MSW, including the repository's initial frontend test-runner setup.
 
 Email delivery, rate limiting, automatic login, and changes to the existing login email-matching behavior are out of scope.
 
@@ -45,11 +45,11 @@ Add a `password_reset_tokens` table with:
 - `invalidated_at`: nullable instant set when the token is used or superseded.
 - `created_at`: issuance instant.
 
-Only the SHA-256 digest is persisted. The raw token is generated from 32 cryptographically random bytes and encoded in a URL-safe form without padding.
+Only the SHA-256 digest is persisted. Real and decoy tokens use the same generator: 32 cryptographically random bytes encoded as unpadded Base64URL per RFC 4648 section 5. They therefore have the same response length and character set.
 
-Tokens expire one hour after issuance by default. The lifetime is configurable through application properties. A token is valid only when its digest exists, `invalidated_at` is null, and `expires_at` is after the current clock instant.
+Tokens expire one hour after issuance by default. The ISO-8601 duration property `tracetick.auth.password-reset.token-ttl` defaults to `PT1H`. A token is valid only when its digest exists, `invalidated_at` is null, and `expires_at` is after the current clock instant.
 
-Issuing a new token invalidates all older unused tokens for that User. Issuance serializes on the User record so concurrent requests cannot leave multiple current tokens. Confirmation locks the matching token record so concurrent submissions cannot both succeed.
+Issuing a new token invalidates all older unused tokens for that User. A `UserRepository` query annotated with `@Lock(PESSIMISTIC_WRITE)` loads the User during issuance, serializing concurrent requests before existing tokens are invalidated and the replacement is inserted. Confirmation loads the matching token through a repository query annotated with `@Lock(PESSIMISTIC_WRITE)` so concurrent submissions cannot both succeed.
 
 ## API Contract
 
@@ -90,6 +90,8 @@ Request:
 }
 ```
 
+The snake-case `new_password` field is required by issue #4. The backend DTO maps it explicitly with `@JsonProperty("new_password")`; this does not change the repository's default camel-case JSON strategy. The frontend sends the same wire name.
+
 A successful confirmation atomically:
 
 1. Locks and validates the token record.
@@ -107,11 +109,11 @@ Validation and failure responses:
 - Expired token: `410 Gone`.
 - New password length: 8–255 characters, matching User creation.
 
-Both endpoints are explicitly permitted by Spring Security while all existing authorization rules remain unchanged.
+Spring Security permits only `POST /api/v1/auth/password-reset` and `POST /api/v1/auth/password-reset/confirm` through explicit `requestMatchers(HttpMethod.POST, ...)` entries before `anyRequest().authenticated()`. All other authorization rules remain unchanged.
 
 ## Frontend Interaction
 
-Add `/password-reset` as a public route beside `/login`.
+Add `/password-reset` as a public route beside `/login`. Add a “Forgot password?” link to the login form so the flow is discoverable. If login has a `next` query parameter, the link carries it through reset and the post-confirmation sign-in action restores it.
 
 The page has two states using the existing login card visual language:
 
@@ -122,7 +124,7 @@ The page also accepts `?token=...` and opens directly in confirmation state, pre
 
 Client-side validation checks required fields, matching passwords, and the 8–255 character password length before submission. Pending submissions disable their buttons. Errors and success messages use accessible live/status semantics consistent with the existing login form.
 
-The API client adds request and confirm methods. Calls made from `/password-reset` must not trigger the global unauthenticated redirect to `/login`.
+The API client's request helper gains a per-call `redirectOnUnauthorized` option that defaults to `true`. The two password-reset methods pass `false`, preventing a reset API failure from invoking the global unauthenticated redirect without coupling generic request behavior to `window.location.pathname`.
 
 ## Error Handling and Transactions
 
@@ -151,7 +153,7 @@ Focused domain/service tests cover:
 
 ### Frontend
 
-Add Vitest, React Testing Library, jest-dom matchers, jsdom, and MSW. Render the page through its router and mock only the HTTP seam. Cover:
+Bootstrap the repository's frontend test infrastructure in this ticket: add Vitest, React Testing Library, jest-dom matchers, jsdom, and MSW; add the Vite test configuration and `test` script; and install shared test setup for jest-dom and the MSW server. A test-local `renderPasswordReset(initialEntries)` helper uses `createMemoryRouter` and `RouterProvider` so each case controls its starting URL while exercising the real route component. Mock only the HTTP seam. Cover:
 
 - Email request transitions to confirmation and prefills the returned token.
 - `?token=` opens confirmation directly.
@@ -163,4 +165,4 @@ During implementation, run the active backend or frontend test file and the rele
 
 ## Migration and Compatibility
 
-Liquibase adds the token table in the next changelog and includes it from the master changelog. Existing User rows require no data migration. Existing sessions, login/logout behavior, and admin User APIs remain compatible.
+Liquibase adds the token table in `0003-password-reset-tokens.yaml` and includes it from the master changelog. Existing User rows require no data migration. Existing sessions, login/logout behavior, and admin User APIs remain compatible.
