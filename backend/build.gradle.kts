@@ -7,6 +7,8 @@ plugins {
 group = "com.tracetick"
 version = "0.1.0-SNAPSHOT"
 
+val lombok = "1.18.34"
+
 java {
     toolchain {
         languageVersion.set(JavaLanguageVersion.of(21))
@@ -33,6 +35,12 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-actuator")
     implementation("org.liquibase:liquibase-core")
     runtimeOnly("org.postgresql:postgresql")
+
+    // Lombok: annotation-processor only — generated getters/setters are bytecode, not a
+    // runtime dep. Both `compileOnly` AND `annotationProcessor` are required on Java 9+.
+    // See ADR-0006 / docs/lombok-policy.md.
+    compileOnly("org.projectlombok:lombok:$lombok")
+    annotationProcessor("org.projectlombok:lombok:$lombok")
 
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.springframework.security:spring-security-test")
