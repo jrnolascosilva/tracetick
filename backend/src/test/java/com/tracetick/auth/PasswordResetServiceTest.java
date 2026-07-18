@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -101,6 +102,65 @@ class PasswordResetServiceTest {
 
         assertThat(oldToken.getInvalidatedAt()).isEqualTo(NOW);
         verify(tokenRepository).saveAll(List.of(oldToken));
+    }
+
+    @Test
+    void validConfirmationChangesHashAndInvalidatesToken() {
+        User user = activeUser();
+        PasswordResetToken token = PasswordResetToken.issue(
+                user, generator.hash("raw-token"), NOW.minusSeconds(60), NOW.plusSeconds(300));
+        when(tokenRepository.findByTokenHashForUpdate(generator.hash("raw-token")))
+                .thenReturn(Optional.of(token));
+        when(passwordEncoder.encode("new-password")).thenReturn("new-hash");
+
+        service.confirmReset("raw-token", "new-password");
+
+        assertThat(user.getPasswordHash()).isEqualTo("new-hash");
+        assertThat(token.getInvalidatedAt()).isEqualTo(NOW);
+        verify(userRepository).save(user);
+        verify(tokenRepository).save(token);
+    }
+
+    @Test
+    void unknownTokenIsInvalid() {
+        when(tokenRepository.findByTokenHashForUpdate(generator.hash("unknown")))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.confirmReset("unknown", "new-password"))
+                .isInstanceOfSatisfying(PasswordResetException.class,
+                        exception -> assertThat(exception.getReason())
+                                .isEqualTo(PasswordResetException.Reason.INVALID));
+    }
+
+    @Test
+    void reusedTokenIsInvalidated() {
+        User user = activeUser();
+        PasswordResetToken token = PasswordResetToken.issue(
+                user, generator.hash("used"), NOW.minusSeconds(60), NOW.plusSeconds(300));
+        token.invalidate(NOW.minusSeconds(10));
+        when(tokenRepository.findByTokenHashForUpdate(generator.hash("used")))
+                .thenReturn(Optional.of(token));
+
+        assertThatThrownBy(() -> service.confirmReset("used", "new-password"))
+                .isInstanceOfSatisfying(PasswordResetException.class,
+                        exception -> assertThat(exception.getReason())
+                                .isEqualTo(PasswordResetException.Reason.INVALIDATED));
+        assertThat(user.getPasswordHash()).isEqualTo("old-hash");
+    }
+
+    @Test
+    void expiredTokenIsExpiredAndLeavesPasswordUnchanged() {
+        User user = activeUser();
+        PasswordResetToken token = PasswordResetToken.issue(
+                user, generator.hash("expired"), NOW.minusSeconds(3600), NOW.minusSeconds(1));
+        when(tokenRepository.findByTokenHashForUpdate(generator.hash("expired")))
+                .thenReturn(Optional.of(token));
+
+        assertThatThrownBy(() -> service.confirmReset("expired", "new-password"))
+                .isInstanceOfSatisfying(PasswordResetException.class,
+                        exception -> assertThat(exception.getReason())
+                                .isEqualTo(PasswordResetException.Reason.EXPIRED));
+        assertThat(user.getPasswordHash()).isEqualTo("old-hash");
     }
 
     private static User activeUser() {

@@ -58,4 +58,25 @@ public class PasswordResetService {
         tokenRepository.save(token);
         return rawToken;
     }
+
+    @Transactional
+    public void confirmReset(String rawToken, String newPassword) {
+        PasswordResetToken token = tokenRepository
+                .findByTokenHashForUpdate(tokenGenerator.hash(rawToken))
+                .orElseThrow(PasswordResetException::invalid);
+
+        Instant now = clock.instant();
+        if (token.getInvalidatedAt() != null) {
+            throw PasswordResetException.invalidated();
+        }
+        if (token.isExpiredAt(now)) {
+            throw PasswordResetException.expired();
+        }
+
+        User user = token.getUser();
+        user.changePasswordHash(passwordEncoder.encode(newPassword));
+        token.invalidate(now);
+        userRepository.save(user);
+        tokenRepository.save(token);
+    }
 }
