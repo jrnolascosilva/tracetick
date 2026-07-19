@@ -1,4 +1,8 @@
-import { Navigate, createBrowserRouter } from 'react-router-dom';
+import {
+  Navigate,
+  createBrowserRouter,
+  type RouteObject,
+} from 'react-router-dom';
 
 import { AppShell } from '@/components/AppShell';
 import { RequireAuth } from '@/components/RequireAuth';
@@ -6,12 +10,14 @@ import { HomePage } from '@/pages/HomePage';
 import { IngestionConfigurationsPage } from '@/pages/IngestionConfigurationsPage';
 import { LoginPage } from '@/pages/LoginPage';
 import { NewTicketPage } from '@/pages/NewTicketPage';
+import { PasswordResetPage } from '@/pages/PasswordResetPage';
 import { TicketDetailPage } from '@/pages/TicketDetailPage';
 import { TicketListPage } from '@/pages/TicketListPage';
 import { UserAdminPage } from '@/pages/UserAdminPage';
 
-export const router = createBrowserRouter([
+export const routes: RouteObject[] = [
   { path: '/login', element: <LoginPage /> },
+  { path: '/password-reset', element: <PasswordResetPage /> },
   {
     element: <RequireAuth />,
     children: [
@@ -33,4 +39,6 @@ export const router = createBrowserRouter([
       },
     ],
   },
-]);
+];
+
+export const router = createBrowserRouter(routes);
