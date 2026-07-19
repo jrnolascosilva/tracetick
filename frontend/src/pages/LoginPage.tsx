@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 
 import { useAuth } from '@/lib/auth';
 
@@ -13,6 +13,9 @@ export function LoginPage() {
   const [submitting, setSubmitting] = useState(false);
 
   const nextPath = searchParams.get('next') ?? '/';
+  const passwordResetPath = searchParams.has('next')
+    ? `/password-reset?next=${encodeURIComponent(nextPath)}`
+    : '/password-reset';
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -58,6 +61,9 @@ export function LoginPage() {
           {submitting ? 'Signing in…' : 'Sign in'}
         </button>
       </form>
+      <p className="password-reset-link">
+        <Link to={passwordResetPath}>Forgot password?</Link>
+      </p>
     </section>
   );
 }

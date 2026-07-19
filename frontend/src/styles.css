@@ -88,7 +88,8 @@ p {
   background: #eef0f3;
 }
 
-.login-page {
+.login-page,
+.password-reset-page {
   max-width: 360px;
   margin: 64px auto;
   padding: 24px;
@@ -97,13 +98,15 @@ p {
   border-radius: 8px;
 }
 
-.login-page form {
+.login-page form,
+.password-reset-page form {
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
 
-.login-page label {
+.login-page label,
+.password-reset-page label {
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -111,14 +114,16 @@ p {
   color: var(--color-muted);
 }
 
-.login-page input {
+.login-page input,
+.password-reset-page input {
   padding: 8px 10px;
   border: 1px solid var(--color-border);
   border-radius: 6px;
   font-size: 14px;
 }
 
-.login-page button {
+.login-page button,
+.password-reset-page button {
   background: var(--color-accent);
   color: #fff;
   border: none;
@@ -128,9 +133,20 @@ p {
   cursor: pointer;
 }
 
-.login-page button:disabled {
+.login-page button:disabled,
+.password-reset-page button:disabled {
   background: #93c1ec;
   cursor: progress;
+}
+
+.password-reset-link {
+  margin: 12px 0 0;
+  font-size: 12px;
+}
+
+.password-reset-link a,
+.password-reset-success a {
+  color: var(--color-accent);
 }
 
 .login-error {

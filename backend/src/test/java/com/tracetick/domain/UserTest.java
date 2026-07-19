@@ -45,6 +45,15 @@ class UserTest {
         assertThat(user.getRole()).isEqualTo(Role.CUSTOMER);
     }
 
+    @Test
+    void changePasswordHashReplacesStoredHash() {
+        User user = User.create(stubCustomer(), "alex@tracetick.local", "old-hash", Role.TECHNICIAN);
+
+        user.changePasswordHash("new-hash");
+
+        assertThat(user.getPasswordHash()).isEqualTo("new-hash");
+    }
+
     private static Customer stubCustomer() {
         return Customer.create("TraceTick", "ops@tracetick.local");
     }

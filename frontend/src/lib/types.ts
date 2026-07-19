@@ -22,3 +22,16 @@ export interface UpdateUserRequest {
   role?: Role;
   active?: boolean;
 }
+
+export interface PasswordResetRequest {
+  email: string;
+}
+
+export interface PasswordResetResponse {
+  token: string;
+}
+
+export interface PasswordResetConfirmRequest {
+  token: string;
+  new_password: string;
+}

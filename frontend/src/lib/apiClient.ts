@@ -1,4 +1,12 @@
-import type { CreateUserRequest, LoginRequest, UpdateUserRequest, User } from '@/lib/types';
+import type {
+  CreateUserRequest,
+  LoginRequest,
+  PasswordResetConfirmRequest,
+  PasswordResetRequest,
+  PasswordResetResponse,
+  UpdateUserRequest,
+  User,
+} from '@/lib/types';
 
 const API_BASE = '/api/v1';
 
@@ -12,7 +20,15 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+export interface RequestOptions {
+  redirectOnUnauthorized?: boolean;
+}
+
+async function request<T>(
+  path: string,
+  init: RequestInit = {},
+  options: RequestOptions = {},
+): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, {
     credentials: 'include',
     headers: {
@@ -23,7 +39,16 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   });
 
   if (response.status === 401) {
-    if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
+    const allowRedirect = options.redirectOnUnauthorized !== false;
+    const onResetPath = path.startsWith('/auth/password-reset');
+    const onLoginPath =
+      typeof window !== 'undefined' && window.location.pathname.startsWith('/login');
+    if (
+      typeof window !== 'undefined' &&
+      allowRedirect &&
+      !onResetPath &&
+      !onLoginPath
+    ) {
       const here = window.location.pathname + window.location.search;
       const next = encodeURIComponent(here);
       window.location.assign(`/login?next=${next}`);
@@ -65,5 +90,19 @@ export const apiClient = {
   },
   updateUser(id: number, body: UpdateUserRequest): Promise<User> {
     return request<User>(`/users/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
+  },
+  requestPasswordReset(body: PasswordResetRequest): Promise<PasswordResetResponse> {
+    return request<PasswordResetResponse>(
+      '/auth/password-reset',
+      { method: 'POST', body: JSON.stringify(body) },
+      { redirectOnUnauthorized: false },
+    );
+  },
+  confirmPasswordReset(body: PasswordResetConfirmRequest): Promise<void> {
+    return request<void>(
+      '/auth/password-reset/confirm',
+      { method: 'POST', body: JSON.stringify(body) },
+      { redirectOnUnauthorized: false },
+    );
   },
 };
