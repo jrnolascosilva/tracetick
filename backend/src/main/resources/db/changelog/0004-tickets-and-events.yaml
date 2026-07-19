@@ -1,0 +1,213 @@
+databaseChangeLog:
+  - changeSet:
+      id: 0004-tickets-and-events
+      author: tracetick
+      comment: |
+        T4 — Ticket domain + REST + filtering + role-scoping + events.
+        Adds `tickets` and `events`. Also introduces `ticket_tags` so the create-time tag
+        acceptance criterion in T4 has a place to land; the add/remove tag endpoints and
+        payload-extraction validation land in T5 alongside `ticket_watchers`.
+      changes:
+        - createTable:
+            tableName: tickets
+            columns:
+              - column:
+                  name: id
+                  type: bigint
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: customer_id
+                  type: bigint
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_tickets_customer
+                    references: customers(id)
+              - column:
+                  name: origin
+                  type: varchar(16)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: reporter_user_id
+                  type: bigint
+                  constraints:
+                    foreignKeyName: fk_tickets_reporter
+                    references: users(id)
+              - column:
+                  name: assignee_user_id
+                  type: bigint
+                  constraints:
+                    foreignKeyName: fk_tickets_assignee
+                    references: users(id)
+              - column:
+                  name: title
+                  type: varchar(255)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: description
+                  type: text
+                  constraints:
+                    nullable: false
+              - column:
+                  name: severity
+                  type: varchar(16)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: state
+                  type: varchar(16)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: fingerprint
+                  type: varchar(255)
+              - column:
+                  name: refire_count
+                  type: int
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+              - column:
+                  name: raw_payload
+                  type: jsonb
+              - column:
+                  name: created_at
+                  type: timestamp with time zone
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: timestamp with time zone
+                  constraints:
+                    nullable: false
+              - column:
+                  name: resolved_at
+                  type: timestamp with time zone
+              - column:
+                  name: closed_at
+                  type: timestamp with time zone
+        - createTable:
+            tableName: ticket_tags
+            columns:
+              - column:
+                  name: ticket_id
+                  type: bigint
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_ticket_tags_ticket
+                    references: tickets(id)
+              - column:
+                  name: key
+                  type: varchar(32)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: value
+                  type: varchar(256)
+                  constraints:
+                    nullable: false
+        - addPrimaryKey:
+            tableName: ticket_tags
+            columnNames: ticket_id, key
+            constraintName: pk_ticket_tags
+        - createTable:
+            tableName: events
+            columns:
+              - column:
+                  name: id
+                  type: bigint
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: ticket_id
+                  type: bigint
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_events_ticket
+                    references: tickets(id)
+              - column:
+                  name: type
+                  type: varchar(32)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: actor_user_id
+                  type: bigint
+                  constraints:
+                    foreignKeyName: fk_events_actor
+                    references: users(id)
+              - column:
+                  name: payload
+                  type: jsonb
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: timestamp with time zone
+                  constraints:
+                    nullable: false
+        - createIndex:
+            tableName: tickets
+            indexName: idx_tickets_customer_id
+            columns:
+              - column:
+                  name: customer_id
+        - createIndex:
+            tableName: tickets
+            indexName: idx_tickets_state
+            columns:
+              - column:
+                  name: state
+        - createIndex:
+            tableName: tickets
+            indexName: idx_tickets_severity
+            columns:
+              - column:
+                  name: severity
+        - createIndex:
+            tableName: tickets
+            indexName: idx_tickets_assignee_user_id
+            columns:
+              - column:
+                  name: assignee_user_id
+        - createIndex:
+            tableName: tickets
+            indexName: idx_tickets_reporter_user_id
+            columns:
+              - column:
+                  name: reporter_user_id
+        - createIndex:
+            tableName: tickets
+            indexName: idx_tickets_created_at
+            columns:
+              - column:
+                  name: created_at
+        - createIndex:
+            tableName: ticket_tags
+            indexName: idx_ticket_tags_key_value
+            columns:
+              - column:
+                  name: key
+              - column:
+                  name: value
+        - createIndex:
+            tableName: events
+            indexName: idx_events_ticket_id_created_at
+            columns:
+              - column:
+                  name: ticket_id
+              - column:
+                  name: created_at
+      rollback:
+        - dropTable:
+            tableName: events
+        - dropTable:
+            tableName: ticket_tags
+        - dropTable:
+            tableName: tickets
