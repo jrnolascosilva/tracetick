@@ -96,6 +96,24 @@ class TicketSpecificationsTest {
     }
 
     @Test
+    void customerCanAlsoSeeTicketsTheyWatch() {
+        Ticket bobsTicket = ticketRepository.findAll().stream()
+                .filter(t -> t.getReporter().getId().equals(bob.getId()))
+                .findFirst().orElseThrow();
+        bobsTicket.addWatcher(alice, bob);
+        ticketRepository.saveAndFlush(bobsTicket);
+        entityManager.clear();
+
+        Page<Ticket> page = ticketRepository.findAll(
+                TicketSpecifications.visibleTo(alice),
+                PageRequest.of(0, 20));
+
+        assertThat(page.getTotalElements())
+                .as("alice's own 2 + the one she watches (bob's) = 3")
+                .isEqualTo(3);
+    }
+
+    @Test
     void filtersByState() {
         Ticket open = ticketRepository.findAll().get(0);
         open.transitionTo(TicketState.IN_PROGRESS, open.getReporter());

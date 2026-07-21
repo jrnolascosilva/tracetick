@@ -213,6 +213,29 @@ class AuthIntegrationTest {
     }
 
     @Test
+    void technicianPickerReturnsOnlyActiveTechnicians() throws Exception {
+        TestFixtures.seedUser(userRepository, customerRepository, passwordEncoder,
+                "tech1@tracetick.local", "secret123", Role.TECHNICIAN);
+        TestFixtures.seedUser(userRepository, customerRepository, passwordEncoder,
+                "tech2@tracetick.local", "secret123", Role.TECHNICIAN);
+        TestFixtures.seedUser(userRepository, customerRepository, passwordEncoder,
+                "cust@tracetick.local", "secret123", Role.CUSTOMER);
+        TestFixtures.deactivate(userRepository, "tech2@tracetick.local");
+        MockHttpSession custSession = loginAndReturnSession("cust@tracetick.local", "secret123");
+
+        mockMvc.perform(get("/api/v1/users/technicians").session(custSession))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[*].email",
+                        org.hamcrest.Matchers.containsInAnyOrder("tech1@tracetick.local")));
+    }
+
+    @Test
+    void technicianPickerRequiresAuthentication() throws Exception {
+        mockMvc.perform(get("/api/v1/users/technicians"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
     void technicianCanCreateUpdateAndDeactivateAUser() throws Exception {
         TestFixtures.seedUser(userRepository, customerRepository, passwordEncoder,
                 "tech@tracetick.local", "secret123", Role.TECHNICIAN);

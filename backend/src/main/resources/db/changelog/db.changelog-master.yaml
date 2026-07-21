@@ -7,3 +7,5 @@ databaseChangeLog:
       file: db/changelog/0003-password-reset-tokens.yaml
   - include:
       file: db/changelog/0004-tickets-and-events.yaml
+  - include:
+      file: db/changelog/0005-ticket-watchers.yaml

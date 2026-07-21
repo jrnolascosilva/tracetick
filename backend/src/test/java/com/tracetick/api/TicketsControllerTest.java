@@ -33,6 +33,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -430,6 +431,126 @@ class TicketsControllerTest {
                         .session(bobSession)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json(Map.of("body", "I should not be here"))))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void postTagAddsTagAndAppendsEvent() throws Exception {
+        Long ticketId = createTicketAs(aliceSession, "API down");
+
+        mockMvc.perform(post("/api/v1/tickets/{id}/tags", ticketId)
+                        .session(aliceSession)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("key", "service", "value", "api"))))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.tags[?(@.key=='service')].value").value("api"));
+
+        Ticket persisted = ticketRepository.findById(ticketId).orElseThrow();
+        assertThat(persisted.getTags())
+                .extracting(t -> t.getKey() + ":" + t.getValue())
+                .contains("service:api");
+        assertThat(ticketEventRepository.findAll().stream()
+                .filter(e -> e.getTicket().getId().equals(ticketId)
+                        && e.getType() == com.tracetick.domain.EventType.TAG_CHANGE)
+                .count()).isEqualTo(1);
+    }
+
+    @Test
+    void postTagWithInvalidKeyReturns400() throws Exception {
+        Long ticketId = createTicketAs(aliceSession, "API down");
+
+        mockMvc.perform(post("/api/v1/tickets/{id}/tags", ticketId)
+                        .session(aliceSession)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("key", "Bad Key", "value", "v"))))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void deleteTagRemovesTag() throws Exception {
+        Long ticketId = createTicketAs(aliceSession, "API down");
+        mockMvc.perform(post("/api/v1/tickets/{id}/tags", ticketId)
+                        .session(aliceSession)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("key", "service", "value", "api"))))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(delete("/api/v1/tickets/{id}/tags/service", ticketId)
+                        .session(aliceSession))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.tags").isEmpty());
+    }
+
+    @Test
+    void postWatcherAddsWatcherAndPopulatesDetail() throws Exception {
+        Long ticketId = createTicketAs(aliceSession, "API down");
+
+        mockMvc.perform(post("/api/v1/tickets/{id}/watchers", ticketId)
+                        .session(aliceSession)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("userId", bob.getId()))))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(get("/api/v1/tickets/{id}", ticketId).session(aliceSession))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.watcherIds[0]").value(bob.getId()));
+    }
+
+    @Test
+    void deleteWatcherRemovesWatcher() throws Exception {
+        Long ticketId = createTicketAs(aliceSession, "API down");
+        mockMvc.perform(post("/api/v1/tickets/{id}/watchers", ticketId)
+                        .session(aliceSession)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("userId", bob.getId()))))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(delete("/api/v1/tickets/{id}/watchers/{userId}", ticketId, bob.getId())
+                        .session(aliceSession))
+                .andExpect(status().isOk());
+
+        Ticket persisted = ticketRepository.findById(ticketId).orElseThrow();
+        assertThat(persisted.getWatchers()).isEmpty();
+    }
+
+    @Test
+    void watcherGainVisibilityForCustomer() throws Exception {
+        Long bobsTicket = createTicketAs(bobSession, "Bob's ticket");
+
+        mockMvc.perform(post("/api/v1/tickets/{id}/watchers", bobsTicket)
+                        .session(bobSession)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("userId", alice.getId()))))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(get("/api/v1/tickets/{id}", bobsTicket).session(aliceSession))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/v1/tickets").session(aliceSession))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.total").value(1))
+                .andExpect(jsonPath("$.items[0].title").value("Bob's ticket"));
+    }
+
+    @Test
+    void customerCannotTagSomeoneElsesTicket() throws Exception {
+        Long ticketId = createTicketAs(aliceSession, "API down");
+
+        mockMvc.perform(post("/api/v1/tickets/{id}/tags", ticketId)
+                        .session(bobSession)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("key", "service", "value", "api"))))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void addWatcherWithUnknownUserReturns404() throws Exception {
+        Long ticketId = createTicketAs(aliceSession, "API down");
+
+        mockMvc.perform(post("/api/v1/tickets/{id}/watchers", ticketId)
+                        .session(aliceSession)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("userId", 999_999L))))
                 .andExpect(status().isNotFound());
     }
 
