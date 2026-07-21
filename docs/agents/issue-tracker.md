@@ -29,6 +29,30 @@ GitHub shares one number space across issues and PRs, so a bare `#42` may be eit
 
 Create a GitHub issue.
 
+## Closing an issue via PR (auto-close)
+
+Use a single closing keyword on its own line at the end of the PR body, with no trailing period and no other references to the same issue number elsewhere in the body. The supported closing keywords are `Closes`, `Fixes`, `Resolves`.
+
+```text
+…body…
+
+Closes #6
+```
+
+Three things that reliably break auto-close (observed on PRs #18 and #20):
+
+1. **Trailing period**: `Closes #6.` — the parser fails to tokenise `#6.` as one reference; write `#6` with no trailing punctuation.
+2. **Mixed keywords for the same issue**: `Implements #6` at the top of the body and `Closes #6` at the bottom leave the parser with two references and it settles on the first one (the non-closing one). If the body must mention the issue in another role, use a parent reference (`Part of #1`) instead of repeating the number.
+3. **Closing keyword in a list item / table row**: `Closes #6` inside `- [x] Tests for ...` is treated as body text, not a closing reference. Put it on its own line outside any list or table.
+
+If the PR merges and the issue stays open, the canonical fallback is:
+
+```bash
+gh issue close <n> --comment "Closed by #<pr>"
+```
+
+Do not amend the squash-merge commit or force-push `main` to "fix" the link — the merge commit is already part of the protected history.
+
 ## When a skill says "fetch the relevant ticket"
 
 Run `gh issue view <number> --comments`.
