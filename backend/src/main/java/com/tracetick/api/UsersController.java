@@ -47,6 +47,13 @@ public class UsersController {
         return userRepository.findAll().stream().map(UserDto::from).toList();
     }
 
+    @GetMapping("/technicians")
+    @PreAuthorize("isAuthenticated()")
+    public List<UserDto> listTechnicians() {
+        return userRepository.findByRoleAndActiveTrue(com.tracetick.domain.Role.TECHNICIAN)
+                .stream().map(UserDto::from).toList();
+    }
+
     @PostMapping
     @PreAuthorize("hasRole('TECHNICIAN')")
     @Transactional

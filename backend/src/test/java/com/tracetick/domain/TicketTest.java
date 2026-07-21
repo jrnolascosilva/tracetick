@@ -271,6 +271,125 @@ class TicketTest {
         assertThat(event.getPayload()).containsEntry("from_user_id", null).containsEntry("to_user_id", null);
     }
 
+    @Test
+    void addTagAppendsTagChangeEventWithKeyAndValue() {
+        Ticket ticket = newOpenTicket();
+        Tag tag = Tag.of("service", "api");
+
+        ticket.addTag(tag, ticket.getReporter());
+
+        assertThat(ticket.getTags()).contains(tag);
+        TicketEvent event = ticket.getNewEvents().stream()
+                .filter(e -> e.getType() == EventType.TAG_CHANGE)
+                .findFirst().orElseThrow();
+        assertThat(event.getActor()).isSameAs(ticket.getReporter());
+        assertThat(event.getPayload()).containsEntry("key", "service").containsEntry("value", "api").containsEntry("action", "added");
+    }
+
+    @Test
+    void addTagIsIdempotentAndDoesNotAppendEventWhenAlreadyPresent() {
+        Ticket ticket = newOpenTicket();
+        Tag tag = Tag.of("service", "api");
+        ticket.addTag(tag, ticket.getReporter());
+        int countAfterFirst = ticket.getNewEvents().size();
+
+        ticket.addTag(tag, ticket.getReporter());
+
+        assertThat(ticket.getTags()).hasSize(1);
+        assertThat(ticket.getNewEvents()).hasSize(countAfterFirst);
+    }
+
+    @Test
+    void removeTagAppendsTagChangeEventWithActionRemoved() {
+        Ticket ticket = newOpenTicket();
+        Tag tag = Tag.of("service", "api");
+        ticket.addTag(tag, ticket.getReporter());
+        int beforeCount = ticket.getNewEvents().size();
+
+        ticket.removeTag("service", ticket.getReporter());
+
+        assertThat(ticket.getTags()).isEmpty();
+        TicketEvent event = ticket.getNewEvents().stream()
+                .skip(beforeCount)
+                .filter(e -> e.getType() == EventType.TAG_CHANGE)
+                .findFirst().orElseThrow();
+        assertThat(event.getPayload()).containsEntry("key", "service").containsEntry("value", "api").containsEntry("action", "removed");
+    }
+
+    @Test
+    void removeTagIsIdempotentAndDoesNotAppendEventWhenAbsent() {
+        Ticket ticket = newOpenTicket();
+        int beforeCount = ticket.getNewEvents().size();
+
+        ticket.removeTag("missing", ticket.getReporter());
+
+        assertThat(ticket.getNewEvents()).hasSize(beforeCount);
+    }
+
+    @Test
+    void addWatcherAppendsWatcherChangeEventWithActionAdded() {
+        Customer customer = Customer.create("TraceTick", "ops@tracetick.local");
+        User watcher = User.create(customer, "watcher@tracetick.local", "hash", Role.CUSTOMER);
+
+        Ticket ticket = newOpenTicket();
+
+        ticket.addWatcher(watcher, ticket.getReporter());
+
+        assertThat(ticket.getWatchers()).contains(watcher);
+        TicketEvent event = ticket.getNewEvents().stream()
+                .filter(e -> e.getType() == EventType.WATCHER_CHANGE)
+                .findFirst().orElseThrow();
+        assertThat(event.getActor()).isSameAs(ticket.getReporter());
+        assertThat(event.getPayload()).containsEntry("user_id", null).containsEntry("action", "added");
+    }
+
+    @Test
+    void addWatcherIsIdempotentAndDoesNotAppendEventWhenAlreadyPresent() {
+        Customer customer = Customer.create("TraceTick", "ops@tracetick.local");
+        User watcher = User.create(customer, "watcher@tracetick.local", "hash", Role.CUSTOMER);
+
+        Ticket ticket = newOpenTicket();
+        ticket.addWatcher(watcher, ticket.getReporter());
+        int countAfterFirst = ticket.getNewEvents().size();
+
+        ticket.addWatcher(watcher, ticket.getReporter());
+
+        assertThat(ticket.getWatchers()).hasSize(1);
+        assertThat(ticket.getNewEvents()).hasSize(countAfterFirst);
+    }
+
+    @Test
+    void removeWatcherAppendsWatcherChangeEventWithActionRemoved() {
+        Customer customer = Customer.create("TraceTick", "ops@tracetick.local");
+        User watcher = User.create(customer, "watcher@tracetick.local", "hash", Role.CUSTOMER);
+
+        Ticket ticket = newOpenTicket();
+        ticket.addWatcher(watcher, ticket.getReporter());
+        int beforeCount = ticket.getNewEvents().size();
+
+        ticket.removeWatcher(watcher, ticket.getReporter());
+
+        assertThat(ticket.getWatchers()).isEmpty();
+        TicketEvent event = ticket.getNewEvents().stream()
+                .skip(beforeCount)
+                .filter(e -> e.getType() == EventType.WATCHER_CHANGE)
+                .findFirst().orElseThrow();
+        assertThat(event.getPayload()).containsEntry("action", "removed");
+    }
+
+    @Test
+    void removeWatcherIsIdempotentAndDoesNotAppendEventWhenAbsent() {
+        Customer customer = Customer.create("TraceTick", "ops@tracetick.local");
+        User watcher = User.create(customer, "watcher@tracetick.local", "hash", Role.CUSTOMER);
+
+        Ticket ticket = newOpenTicket();
+        int beforeCount = ticket.getNewEvents().size();
+
+        ticket.removeWatcher(watcher, ticket.getReporter());
+
+        assertThat(ticket.getNewEvents()).hasSize(beforeCount);
+    }
+
     private static Ticket newOpenTicket() {
         Customer customer = Customer.create("TraceTick", "ops@tracetick.local");
         User reporter = User.create(customer, "reporter@tracetick.local", "hash", Role.CUSTOMER);

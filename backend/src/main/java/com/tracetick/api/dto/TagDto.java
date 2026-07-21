@@ -1,4 +1,9 @@
 package com.tracetick.api.dto;
 
-public record TagDto(String key, String value) {
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
+
+public record TagDto(
+        @NotBlank @Size(max = 32) String key,
+        @NotBlank @Size(max = 256) String value) {
 }

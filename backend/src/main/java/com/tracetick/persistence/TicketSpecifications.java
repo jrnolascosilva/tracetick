@@ -8,6 +8,8 @@ import com.tracetick.domain.TicketState;
 import com.tracetick.domain.User;
 import jakarta.persistence.criteria.Join;
 import jakarta.persistence.criteria.JoinType;
+import jakarta.persistence.criteria.Root;
+import jakarta.persistence.criteria.Subquery;
 import org.springframework.data.jpa.domain.Specification;
 
 public final class TicketSpecifications {
@@ -59,6 +61,14 @@ public final class TicketSpecifications {
         if (viewer.getRole() == Role.TECHNICIAN) {
             return null;
         }
-        return (root, query, cb) -> cb.equal(root.get("reporter").get("id"), viewer.getId());
+        return (root, query, cb) -> {
+            Subquery<Long> watchedByMe = query.subquery(Long.class);
+            Root<Ticket> watched = watchedByMe.from(Ticket.class);
+            watchedByMe.select(watched.get("id"));
+            watchedByMe.where(cb.equal(watched.join("watchers").get("id"), viewer.getId()));
+            return cb.or(
+                    cb.equal(root.get("reporter").get("id"), viewer.getId()),
+                    root.get("id").in(watchedByMe));
+        };
     }
 }

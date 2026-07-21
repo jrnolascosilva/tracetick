@@ -1,9 +1,11 @@
 package com.tracetick.api;
 
+import com.tracetick.api.dto.AddWatcherRequest;
 import com.tracetick.api.dto.CommentRequest;
 import com.tracetick.api.dto.CreateTicketRequest;
 import com.tracetick.api.dto.EventDto;
 import com.tracetick.api.dto.PageDto;
+import com.tracetick.api.dto.TagDto;
 import com.tracetick.api.dto.TicketDetailDto;
 import com.tracetick.api.dto.TicketDto;
 import com.tracetick.api.dto.UpdateTicketRequest;
@@ -19,6 +21,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -77,10 +80,12 @@ public class TicketsController {
     public TicketDetailDto get(@PathVariable Long id) {
         var detail = ticketService.loadDetail(id, currentUser());
         var events = detail.events().stream().map(EventDto::from).toList();
+        List<Long> watcherIds = detail.ticket().getWatchers().stream()
+                .map(User::getId).toList();
         return new TicketDetailDto(
                 TicketDto.from(detail.ticket()),
                 events,
-                List.of());
+                watcherIds);
     }
 
     @PatchMapping("/{id}")
@@ -92,6 +97,28 @@ public class TicketsController {
     public ResponseEntity<EventDto> comment(@PathVariable Long id, @Valid @RequestBody CommentRequest request) {
         var event = ticketService.addComment(id, request, currentUser());
         return ResponseEntity.status(HttpStatus.CREATED).body(EventDto.from(event));
+    }
+
+    @PostMapping("/{id}/tags")
+    public ResponseEntity<TicketDto> addTag(@PathVariable Long id, @Valid @RequestBody TagDto request) {
+        var ticket = ticketService.addTag(id, request.key(), request.value(), currentUser());
+        return ResponseEntity.status(HttpStatus.CREATED).body(TicketDto.from(ticket));
+    }
+
+    @DeleteMapping("/{id}/tags/{key}")
+    public TicketDto removeTag(@PathVariable Long id, @PathVariable String key) {
+        return TicketDto.from(ticketService.removeTag(id, key, currentUser()));
+    }
+
+    @PostMapping("/{id}/watchers")
+    public ResponseEntity<TicketDto> addWatcher(@PathVariable Long id, @Valid @RequestBody AddWatcherRequest request) {
+        var ticket = ticketService.addWatcher(id, request.userId(), currentUser());
+        return ResponseEntity.status(HttpStatus.CREATED).body(TicketDto.from(ticket));
+    }
+
+    @DeleteMapping("/{id}/watchers/{userId}")
+    public TicketDto removeWatcher(@PathVariable Long id, @PathVariable Long userId) {
+        return TicketDto.from(ticketService.removeWatcher(id, userId, currentUser()));
     }
 
     private static String[] parseTag(String tag) {

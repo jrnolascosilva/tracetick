@@ -14,6 +14,8 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
+import jakarta.persistence.JoinTable;
+import jakarta.persistence.ManyToMany;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.OrderBy;
@@ -96,6 +98,12 @@ public class Ticket {
     @CollectionTable(name = "ticket_tags",
             joinColumns = @JoinColumn(name = "ticket_id"))
     private Set<Tag> tags = new HashSet<>();
+
+    @ManyToMany(fetch = FetchType.EAGER)
+    @JoinTable(name = "ticket_watchers",
+            joinColumns = @JoinColumn(name = "ticket_id"),
+            inverseJoinColumns = @JoinColumn(name = "user_id"))
+    private Set<User> watchers = new HashSet<>();
 
     @OneToMany(mappedBy = "ticket", cascade = CascadeType.ALL, orphanRemoval = true,
             fetch = FetchType.LAZY)
@@ -190,12 +198,63 @@ public class Ticket {
         return appendInternalEvent(EventType.COMMENT, author, Map.of("body", body));
     }
 
+    public boolean addTag(Tag tag, User actor) {
+        if (!tags.add(tag)) {
+            return false;
+        }
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("key", tag.getKey());
+        payload.put("value", tag.getValue());
+        payload.put("action", "added");
+        appendInternalEvent(EventType.TAG_CHANGE, actor, payload);
+        return true;
+    }
+
+    public boolean removeTag(String key, User actor) {
+        Tag removed = tags.stream().filter(t -> t.getKey().equals(key)).findFirst().orElse(null);
+        if (removed == null || !tags.remove(removed)) {
+            return false;
+        }
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("key", removed.getKey());
+        payload.put("value", removed.getValue());
+        payload.put("action", "removed");
+        appendInternalEvent(EventType.TAG_CHANGE, actor, payload);
+        return true;
+    }
+
+    public boolean addWatcher(User watcher, User actor) {
+        if (!watchers.add(watcher)) {
+            return false;
+        }
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("user_id", watcher.getId());
+        payload.put("action", "added");
+        appendInternalEvent(EventType.WATCHER_CHANGE, actor, payload);
+        return true;
+    }
+
+    public boolean removeWatcher(User watcher, User actor) {
+        if (!watchers.remove(watcher)) {
+            return false;
+        }
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("user_id", watcher.getId());
+        payload.put("action", "removed");
+        appendInternalEvent(EventType.WATCHER_CHANGE, actor, payload);
+        return true;
+    }
+
     public List<TicketEvent> getNewEvents() {
         return List.copyOf(newEvents);
     }
 
     public Set<Tag> getTags() {
         return Set.copyOf(tags);
+    }
+
+    public Set<User> getWatchers() {
+        return Set.copyOf(watchers);
     }
 
     private void ensureCanReopen(User actor) {
