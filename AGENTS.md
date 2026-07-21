@@ -11,3 +11,7 @@ Five canonical roles; label strings equal role names (defaults). See `docs/agent
 ### Domain docs
 
 Single-context: `CONTEXT.md` + `docs/architecture/adrs/` at the repo root. See `docs/agents/domain.md`.
+
+### Git workflow
+
+Tickets ship on per-ticket branches (`t<N>-<kebab-topic>`) and land via PR — never by pushing to `main`. See `docs/agents/git-workflow.md`.
