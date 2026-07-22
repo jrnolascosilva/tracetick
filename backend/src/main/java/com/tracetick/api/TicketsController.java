@@ -16,7 +16,9 @@ import com.tracetick.persistence.UserRepository;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -34,12 +36,19 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.net.URI;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 @RestController
 @RequestMapping("/api/v1/tickets")
 public class TicketsController {
 
     private static final int MAX_PAGE_SIZE = 100;
+    private static final Set<String> ALLOWED_SORT_FIELDS = Set.of("severity", "state", "createdAt");
+    private static final Map<String, String> SORT_FIELD_TRANSLATION = Map.of(
+            "severity", "severityOrder",
+            "state", "stateOrder",
+            "createdAt", "createdAt");
 
     private final TicketService ticketService;
     private final UserRepository userRepository;
@@ -63,15 +72,16 @@ public class TicketsController {
                                    @RequestParam(required = false) Long assignee,
                                    @RequestParam(name = "tag", required = false) String tag,
                                    @RequestParam(required = false) String search,
-                                   @RequestParam(defaultValue = "0") int page,
-                                   @RequestParam(defaultValue = "50") int size) {
-        int safePage = Math.max(page, 0);
-        int safeSize = Math.min(Math.max(size, 1), MAX_PAGE_SIZE);
+                                   @PageableDefault(size = 50, sort = "createdAt", direction = Sort.Direction.DESC)
+                                   Pageable pageable) {
+        Sort sort = validatedAndTranslatedSort(pageable.getSort());
+        int safePage = Math.max(pageable.getPageNumber(), 0);
+        int safeSize = Math.min(Math.max(pageable.getPageSize(), 1), MAX_PAGE_SIZE);
         String[] tagParts = parseTag(tag);
         User viewer = currentUser();
         Page<com.tracetick.domain.Ticket> result = ticketService.findTickets(
                 viewer, state, severity, assignee, tagParts[0], tagParts[1], search,
-                PageRequest.of(safePage, safeSize, Sort.by(Sort.Direction.DESC, "createdAt")));
+                PageRequest.of(safePage, safeSize, sort));
         List<TicketDto> items = result.getContent().stream().map(TicketDto::from).toList();
         return new PageDto<>(items, safePage, safeSize, result.getTotalElements());
     }
@@ -131,6 +141,29 @@ public class TicketsController {
                     "Tag must be in 'key:value' format");
         }
         return new String[]{tag.substring(0, colon), tag.substring(colon + 1)};
+    }
+
+    private static Sort validatedAndTranslatedSort(Sort sort) {
+        validateSort(sort);
+        return translateSort(sort).and(Sort.by(Sort.Direction.ASC, "id"));
+    }
+
+    private static void validateSort(Sort sort) {
+        for (Sort.Order order : sort) {
+            if (!ALLOWED_SORT_FIELDS.contains(order.getProperty())) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Bad sort field: " + order.getProperty());
+            }
+        }
+    }
+
+    private static Sort translateSort(Sort sort) {
+        Sort translated = Sort.unsorted();
+        for (Sort.Order order : sort) {
+            translated = translated.and(Sort.by(order.getDirection(),
+                    SORT_FIELD_TRANSLATION.get(order.getProperty())));
+        }
+        return translated;
     }
 
     private User currentUser() {

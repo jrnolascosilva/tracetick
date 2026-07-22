@@ -3,8 +3,9 @@ import { useEffect, useState } from 'react';
 
 import { UserAdminForm } from '@/components/UserAdminForm';
 import { UserTable } from '@/components/UserTable';
-import { ApiError, apiClient } from '@/lib/apiClient';
+import { apiClient } from '@/lib/apiClient';
 import { useAuth } from '@/lib/auth';
+import { describeApiError } from '@/lib/errors';
 import type { Role, User } from '@/lib/types';
 
 const USERS_QUERY_KEY = ['users'] as const;
@@ -43,7 +44,7 @@ export function UserAdminPage() {
       <h2>Users</h2>
       {usersQuery.isError && (
         <p role="alert" className="user-admin-error">
-          Failed to load users: {describeError(usersQuery.error)}
+          Failed to load users: {describeApiError(usersQuery.error)}
         </p>
       )}
       {usersQuery.isPending && <p>Loading users…</p>}
@@ -65,7 +66,7 @@ export function UserAdminPage() {
       <h3>Invite user</h3>
       <UserAdminForm
         busy={createMutation.isPending}
-        error={createMutation.isError ? describeError(createMutation.error) : null}
+        error={createMutation.isError ? describeApiError(createMutation.error) : null}
         onSubmit={async (email, password, role) => {
           await createMutation.mutateAsync({ email, password, role });
         }}
@@ -126,11 +127,4 @@ function EditPanel({
       </div>
     </section>
   );
-}
-
-function describeError(error: unknown): string {
-  if (error instanceof ApiError) {
-    return error.message || `HTTP ${error.status}`;
-  }
-  return 'Unknown error';
 }

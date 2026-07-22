@@ -22,6 +22,7 @@ import jakarta.persistence.OrderBy;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
 import lombok.Getter;
+import org.hibernate.annotations.Formula;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
@@ -71,6 +72,12 @@ public class Ticket {
     @Enumerated(EnumType.STRING)
     @Column(name = "state", nullable = false, length = 16)
     private TicketState state;
+
+    @Formula("(CASE severity WHEN 'LOW' THEN 0 WHEN 'MEDIUM' THEN 1 WHEN 'HIGH' THEN 2 WHEN 'CRITICAL' THEN 3 ELSE 4 END)")
+    private int severityOrder;
+
+    @Formula("(CASE state WHEN 'OPEN' THEN 0 WHEN 'IN_PROGRESS' THEN 1 WHEN 'RESOLVED' THEN 2 WHEN 'CLOSED' THEN 3 ELSE 4 END)")
+    private int stateOrder;
 
     @Column(name = "fingerprint", length = 255)
     private String fingerprint;

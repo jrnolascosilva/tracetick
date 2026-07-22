@@ -211,6 +211,130 @@ class TicketsControllerTest {
     }
 
     @Test
+    void sortBySeverityDescReturnsHighestPriorityFirst() throws Exception {
+        createTicketAs(aliceSession, "Low ticket", "LOW");
+        createTicketAs(aliceSession, "Medium ticket", "MEDIUM");
+        createTicketAs(aliceSession, "Critical ticket", "CRITICAL");
+        createTicketAs(aliceSession, "High ticket", "HIGH");
+
+        mockMvc.perform(get("/api/v1/tickets")
+                        .param("sort", "severity,desc")
+                        .session(aliceSession))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[*].severity",
+                        org.hamcrest.Matchers.contains("CRITICAL", "HIGH", "MEDIUM", "LOW")));
+    }
+
+    @Test
+    void sortByStateAscReturnsLifecycleOrder() throws Exception {
+        Long openId = createTicketAs(aliceSession, "Open ticket");
+        Long inProgressId = createTicketAs(aliceSession, "In progress ticket");
+        Long resolvedId = createTicketAs(aliceSession, "Resolved ticket");
+        Long closedId = createTicketAs(aliceSession, "Closed ticket");
+        patchAndAssert(inProgressId, techSession, Map.of("state", "IN_PROGRESS"), 200, "IN_PROGRESS");
+        patchAndAssert(resolvedId, techSession, Map.of("state", "IN_PROGRESS"), 200, "IN_PROGRESS");
+        patchAndAssert(resolvedId, techSession, Map.of("state", "RESOLVED"), 200, "RESOLVED");
+        patchAndAssert(closedId, techSession, Map.of("state", "IN_PROGRESS"), 200, "IN_PROGRESS");
+        patchAndAssert(closedId, techSession, Map.of("state", "CLOSED"), 200, "CLOSED");
+
+        mockMvc.perform(get("/api/v1/tickets")
+                        .param("sort", "state,asc")
+                        .session(aliceSession))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[*].id",
+                        org.hamcrest.Matchers.contains(
+                                openId.intValue(),
+                                inProgressId.intValue(),
+                                resolvedId.intValue(),
+                                closedId.intValue())));
+    }
+
+    @Test
+    void sortByCreatedAtAscReturnsOldestFirst() throws Exception {
+        Long firstId = createTicketAs(aliceSession, "First ticket");
+        Long secondId = createTicketAs(aliceSession, "Second ticket");
+        Long thirdId = createTicketAs(aliceSession, "Third ticket");
+
+        mockMvc.perform(get("/api/v1/tickets")
+                        .param("sort", "createdAt,asc")
+                        .session(aliceSession))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[*].id",
+                        org.hamcrest.Matchers.contains(
+                                firstId.intValue(),
+                                secondId.intValue(),
+                                thirdId.intValue())));
+    }
+
+    @Test
+    void sortWithUnknownFieldReturns400() throws Exception {
+        mockMvc.perform(get("/api/v1/tickets")
+                        .param("sort", "reporter,desc")
+                        .session(aliceSession))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void sortWithUnknownDirectionReturns400() throws Exception {
+        mockMvc.perform(get("/api/v1/tickets")
+                        .param("sort", "severity,sideways")
+                        .session(aliceSession))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void sortWithoutParamDefaultsToCreatedAtDesc() throws Exception {
+        Long firstId = createTicketAs(aliceSession, "First ticket");
+        Thread.sleep(10);
+        Long secondId = createTicketAs(aliceSession, "Second ticket");
+
+        mockMvc.perform(get("/api/v1/tickets").session(aliceSession))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[*].id",
+                        org.hamcrest.Matchers.contains(secondId.intValue(), firstId.intValue())));
+    }
+
+    @Test
+    void paginationIsStableAcrossPagesWhenSortingBySeverity() throws Exception {
+        Long firstId = createTicketAs(aliceSession, "Critical one", "CRITICAL");
+        Long secondId = createTicketAs(aliceSession, "Critical two", "CRITICAL");
+        Long thirdId = createTicketAs(aliceSession, "Critical three", "CRITICAL");
+        Long lowId = createTicketAs(aliceSession, "Low one", "LOW");
+
+        MvcResult page1 = mockMvc.perform(get("/api/v1/tickets")
+                        .param("sort", "severity,desc")
+                        .param("size", "2")
+                        .param("page", "0")
+                        .session(aliceSession))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items.length()").value(2))
+                .andReturn();
+
+        MvcResult page2 = mockMvc.perform(get("/api/v1/tickets")
+                        .param("sort", "severity,desc")
+                        .param("size", "2")
+                        .param("page", "1")
+                        .session(aliceSession))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items.length()").value(2))
+                .andReturn();
+
+        List<Integer> page1Ids = objectMapper.readTree(page1.getResponse().getContentAsString())
+                .get("items").findValues("id").stream().map(n -> n.asInt()).toList();
+        List<Integer> page2Ids = objectMapper.readTree(page2.getResponse().getContentAsString())
+                .get("items").findValues("id").stream().map(n -> n.asInt()).toList();
+        List<Integer> combined = new java.util.ArrayList<>();
+        combined.addAll(page1Ids);
+        combined.addAll(page2Ids);
+
+        assertThat(combined).containsExactly(
+                firstId.intValue(),
+                secondId.intValue(),
+                thirdId.intValue(),
+                lowId.intValue());
+    }
+
+    @Test
     void filtersByTag() throws Exception {
         mockMvc.perform(post("/api/v1/tickets")
                         .session(aliceSession)

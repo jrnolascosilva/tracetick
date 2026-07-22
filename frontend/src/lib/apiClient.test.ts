@@ -74,3 +74,112 @@ describe('apiClient password reset', () => {
     expect(window.location.pathname).toBe(defaultPath);
   });
 });
+
+describe('apiClient tickets', () => {
+  it('hits /tickets with no query string when params are empty', async () => {
+    let observedUrl: string | null = null;
+    server.use(
+      http.get('/api/v1/tickets', ({ request }) => {
+        observedUrl = request.url;
+        return HttpResponse.json({ items: [], page: 0, size: 50, total: 0 });
+      }),
+    );
+
+    const result = await apiClient.listTickets();
+    expect(observedUrl).not.toBeNull();
+    const url = new URL(observedUrl!);
+    expect(url.pathname).toBe('/api/v1/tickets');
+    expect(url.search).toBe('');
+    expect(result).toEqual({ items: [], page: 0, size: 50, total: 0 });
+  });
+
+  it('encodes filter params in the query string', async () => {
+    let observedUrl: string | null = null;
+    server.use(
+      http.get('/api/v1/tickets', ({ request }) => {
+        observedUrl = request.url;
+        return HttpResponse.json({ items: [], page: 0, size: 50, total: 0 });
+      }),
+    );
+
+    await apiClient.listTickets({
+      state: 'OPEN',
+      severity: 'CRITICAL',
+      assignee: 7,
+      tag: 'service:api',
+      search: 'latency',
+      page: 2,
+      size: 25,
+    });
+
+    expect(observedUrl).not.toBeNull();
+    const url = new URL(observedUrl!);
+    expect(url.searchParams.get('state')).toBe('OPEN');
+    expect(url.searchParams.get('severity')).toBe('CRITICAL');
+    expect(url.searchParams.get('assignee')).toBe('7');
+    expect(url.searchParams.get('tag')).toBe('service:api');
+    expect(url.searchParams.get('search')).toBe('latency');
+    expect(url.searchParams.get('page')).toBe('2');
+    expect(url.searchParams.get('size')).toBe('25');
+  });
+
+  it('omits blank filter params from the query string', async () => {
+    let observedUrl: string | null = null;
+    server.use(
+      http.get('/api/v1/tickets', ({ request }) => {
+        observedUrl = request.url;
+        return HttpResponse.json({ items: [], page: 0, size: 50, total: 0 });
+      }),
+    );
+
+    await apiClient.listTickets({ state: 'OPEN', search: '   ', tag: '' });
+    const url = new URL(observedUrl!);
+    expect(url.searchParams.get('state')).toBe('OPEN');
+    expect(url.searchParams.has('search')).toBe(false);
+    expect(url.searchParams.has('tag')).toBe(false);
+  });
+
+  it('forwards the sort param as a single query entry', async () => {
+    let observedUrl: string | null = null;
+    server.use(
+      http.get('/api/v1/tickets', ({ request }) => {
+        observedUrl = request.url;
+        return HttpResponse.json({ items: [], page: 0, size: 50, total: 0 });
+      }),
+    );
+
+    await apiClient.listTickets({ sort: 'severity,desc' });
+    const url = new URL(observedUrl!);
+    expect(url.searchParams.get('sort')).toBe('severity,desc');
+  });
+
+  it('omits a blank sort param from the query string', async () => {
+    let observedUrl: string | null = null;
+    server.use(
+      http.get('/api/v1/tickets', ({ request }) => {
+        observedUrl = request.url;
+        return HttpResponse.json({ items: [], page: 0, size: 50, total: 0 });
+      }),
+    );
+
+    await apiClient.listTickets({ sort: '   ' });
+    const url = new URL(observedUrl!);
+    expect(url.searchParams.has('sort')).toBe(false);
+  });
+
+  it('fetches a single ticket by id', async () => {
+    server.use(
+      http.get('/api/v1/tickets/42', () =>
+        HttpResponse.json({
+          ticket: { id: 42, title: 'Latency spike' },
+          events: [{ id: 1, type: 'COMMENT' }],
+          watcherIds: [],
+        }),
+      ),
+    );
+
+    const detail = await apiClient.getTicket(42);
+    expect(detail.ticket.id).toBe(42);
+    expect(detail.events).toHaveLength(1);
+  });
+});

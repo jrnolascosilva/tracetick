@@ -1,9 +1,13 @@
 import type {
   CreateUserRequest,
+  ListTicketsParams,
   LoginRequest,
+  Page,
   PasswordResetConfirmRequest,
   PasswordResetRequest,
   PasswordResetResponse,
+  Ticket,
+  TicketDetail,
   UpdateUserRequest,
   User,
 } from '@/lib/types';
@@ -104,5 +108,22 @@ export const apiClient = {
       { method: 'POST', body: JSON.stringify(body) },
       { redirectOnUnauthorized: false },
     );
+  },
+  listTickets(params: ListTicketsParams = {}): Promise<Page<Ticket>> {
+    const search = new URLSearchParams();
+    if (params.state) search.set('state', params.state);
+    if (params.severity) search.set('severity', params.severity);
+    if (params.assignee !== undefined) search.set('assignee', String(params.assignee));
+    if (params.tag && params.tag.trim()) search.set('tag', params.tag);
+    if (params.search && params.search.trim()) search.set('search', params.search.trim());
+    if (params.sort && params.sort.trim()) search.set('sort', params.sort.trim());
+    if (params.page !== undefined) search.set('page', String(params.page));
+    if (params.size !== undefined) search.set('size', String(params.size));
+    const query = search.toString();
+    const path = query.length > 0 ? `/tickets?${query}` : '/tickets';
+    return request<Page<Ticket>>(path);
+  },
+  getTicket(id: number): Promise<TicketDetail> {
+    return request<TicketDetail>(`/tickets/${id}`);
   },
 };
