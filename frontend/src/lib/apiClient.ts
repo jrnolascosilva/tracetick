@@ -1,4 +1,5 @@
 import type {
+  CreateTicketRequest,
   CreateUserRequest,
   ListTicketsParams,
   LoginRequest,
@@ -125,5 +126,11 @@ export const apiClient = {
   },
   getTicket(id: number): Promise<TicketDetail> {
     return request<TicketDetail>(`/tickets/${id}`);
+  },
+  createTicket(body: CreateTicketRequest): Promise<Ticket> {
+    return request<Ticket>('/tickets', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
   },
 };
