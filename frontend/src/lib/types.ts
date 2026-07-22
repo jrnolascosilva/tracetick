@@ -101,6 +101,7 @@ export interface ListTicketsParams {
   assignee?: number;
   tag?: string;
   search?: string;
+  sort?: string;
   page?: number;
   size?: number;
 }

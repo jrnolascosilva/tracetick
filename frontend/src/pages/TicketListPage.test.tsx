@@ -170,25 +170,31 @@ describe('TicketListPage', () => {
     expect(url.searchParams.get('tag')).toBe('service:api');
   });
 
-  it('sorts the rendered tickets by severity desc when selected', async () => {
+  it('writes sort=severity,desc to the URL and forwards it to the API when Severity is selected', async () => {
+    const calls: URL[] = [];
     server.use(
-      http.get('/api/v1/tickets', () =>
-        HttpResponse.json({
+      http.get('/api/v1/tickets', ({ request }) => {
+        calls.push(new URL(request.url));
+        return HttpResponse.json({
           items: [
-            makeTicket({ id: 1, title: 'Low thing', severity: 'LOW' }),
             makeTicket({ id: 2, title: 'Critical thing', severity: 'CRITICAL' }),
             makeTicket({ id: 3, title: 'High thing', severity: 'HIGH' }),
+            makeTicket({ id: 1, title: 'Low thing', severity: 'LOW' }),
           ],
           page: 0,
           size: 50,
           total: 3,
-        })),
+        });
+      }),
     );
 
-    const { user } = renderList('/tickets?sort=severity&direction=desc');
+    const { user } = renderList('/tickets');
 
     await screen.findByRole('link', { name: 'Critical thing' });
     await user.click(screen.getByRole('radio', { name: 'Severity' }));
+
+    expect(searchParamsState.current.get('sort')).toBe('severity,desc');
+    expect(calls.at(-1)?.searchParams.get('sort')).toBe('severity,desc');
 
     const rows = screen.getAllByRole('row').slice(1);
     expect(within(rows[0]).getByText('Critical thing')).toBeInTheDocument();
@@ -196,30 +202,51 @@ describe('TicketListPage', () => {
     expect(within(rows[2]).getByText('Low thing')).toBeInTheDocument();
   });
 
-  it('sorts by state ascending when selected', async () => {
+  it('writes sort=state,desc to the URL and forwards it to the API when State is selected', async () => {
+    const calls: URL[] = [];
     server.use(
-      http.get('/api/v1/tickets', () =>
-        HttpResponse.json({
+      http.get('/api/v1/tickets', ({ request }) => {
+        calls.push(new URL(request.url));
+        return HttpResponse.json({
           items: [
-            makeTicket({ id: 1, title: 'Resolved', state: 'RESOLVED' }),
             makeTicket({ id: 2, title: 'Open', state: 'OPEN' }),
+            makeTicket({ id: 1, title: 'Resolved', state: 'RESOLVED' }),
             makeTicket({ id: 3, title: 'Closed', state: 'CLOSED' }),
           ],
           page: 0,
           size: 50,
           total: 3,
-        })),
+        });
+      }),
     );
 
-    const { user } = renderList('/tickets?sort=state&direction=asc');
+    const { user } = renderList('/tickets');
 
     await screen.findByRole('link', { name: 'Open' });
     await user.click(screen.getByRole('radio', { name: 'State' }));
 
-    const rows = screen.getAllByRole('row').slice(1);
-    expect(within(rows[0]).getByText('Open')).toBeInTheDocument();
-    expect(within(rows[1]).getByText('Resolved')).toBeInTheDocument();
-    expect(within(rows[2]).getByText('Closed')).toBeInTheDocument();
+    expect(searchParamsState.current.get('sort')).toBe('state,desc');
+    expect(calls.at(-1)?.searchParams.get('sort')).toBe('state,desc');
+  });
+
+  it('pre-selects the sort radio and forwards the sort param when the URL already carries it', async () => {
+    const calls: URL[] = [];
+    server.use(
+      http.get('/api/v1/tickets', ({ request }) => {
+        calls.push(new URL(request.url));
+        return HttpResponse.json({
+          items: [makeTicket({ id: 1, title: 'Only ticket' })],
+          page: 0,
+          size: 50,
+          total: 1,
+        });
+      }),
+    );
+
+    renderList('/tickets?sort=createdAt,asc');
+
+    expect(await screen.findByRole('link', { name: 'Only ticket' })).toBeInTheDocument();
+    expect(calls[0].searchParams.get('sort')).toBe('createdAt,asc');
   });
 
   it('paginates to the next page when Next is clicked', async () => {

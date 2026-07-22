@@ -139,6 +139,34 @@ describe('apiClient tickets', () => {
     expect(url.searchParams.has('tag')).toBe(false);
   });
 
+  it('forwards the sort param as a single query entry', async () => {
+    let observedUrl: string | null = null;
+    server.use(
+      http.get('/api/v1/tickets', ({ request }) => {
+        observedUrl = request.url;
+        return HttpResponse.json({ items: [], page: 0, size: 50, total: 0 });
+      }),
+    );
+
+    await apiClient.listTickets({ sort: 'severity,desc' });
+    const url = new URL(observedUrl!);
+    expect(url.searchParams.get('sort')).toBe('severity,desc');
+  });
+
+  it('omits a blank sort param from the query string', async () => {
+    let observedUrl: string | null = null;
+    server.use(
+      http.get('/api/v1/tickets', ({ request }) => {
+        observedUrl = request.url;
+        return HttpResponse.json({ items: [], page: 0, size: 50, total: 0 });
+      }),
+    );
+
+    await apiClient.listTickets({ sort: '   ' });
+    const url = new URL(observedUrl!);
+    expect(url.searchParams.has('sort')).toBe(false);
+  });
+
   it('fetches a single ticket by id', async () => {
     server.use(
       http.get('/api/v1/tickets/42', () =>

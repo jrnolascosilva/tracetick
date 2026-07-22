@@ -11,21 +11,7 @@ import type { Severity, Ticket, TicketState } from '@/lib/types';
 const TICKETS_QUERY_KEY = ['tickets'] as const;
 const DEFAULT_PAGE_SIZE = 50;
 
-const SEVERITY_ORDER: Record<Severity, number> = {
-  LOW: 0,
-  MEDIUM: 1,
-  HIGH: 2,
-  CRITICAL: 3,
-};
-
-const STATE_ORDER: Record<TicketState, number> = {
-  OPEN: 0,
-  IN_PROGRESS: 1,
-  RESOLVED: 2,
-  CLOSED: 3,
-};
-
-type SortKey = 'severity' | 'state' | 'age';
+type SortKey = 'severity' | 'state' | 'createdAt';
 type SortDirection = 'asc' | 'desc';
 
 interface SortState {
@@ -33,7 +19,13 @@ interface SortState {
   direction: SortDirection;
 }
 
-const DEFAULT_SORT: SortState = { key: 'age', direction: 'desc' };
+const SORT_LABELS: Record<SortKey, string> = {
+  severity: 'Severity',
+  state: 'State',
+  createdAt: 'Age',
+};
+
+const DEFAULT_SORT: SortState = { key: 'createdAt', direction: 'desc' };
 
 export function TicketListPage() {
   const auth = useAuth();
@@ -45,7 +37,7 @@ export function TicketListPage() {
   const tagFilter = searchParams.get('tag') ?? '';
   const searchFilter = searchParams.get('search') ?? '';
   const page = parsePage(searchParams.get('page'));
-  const sort = readSort(searchParams.get('sort'), searchParams.get('direction'));
+  const sort = readSort(searchParams.get('sort'));
 
   const queryParams = useMemo(
     () => ({
@@ -53,10 +45,11 @@ export function TicketListPage() {
       severity: severityFilter ?? undefined,
       tag: tagFilter || undefined,
       search: searchFilter || undefined,
+      sort: `${sort.key},${sort.direction}`,
       page,
       size: DEFAULT_PAGE_SIZE,
     }),
-    [stateFilter, severityFilter, tagFilter, searchFilter, page],
+    [stateFilter, severityFilter, tagFilter, searchFilter, sort, page],
   );
 
   const ticketsQuery = useQuery({
@@ -64,11 +57,6 @@ export function TicketListPage() {
     queryFn: () => apiClient.listTickets(queryParams),
     enabled: auth.status === 'authenticated',
   });
-
-  const sortedItems = useMemo(
-    () => sortTickets(ticketsQuery.data?.items ?? [], sort),
-    [ticketsQuery.data, sort],
-  );
 
   const updateParams = useCallback(
     (mutate: (next: URLSearchParams) => void) => {
@@ -94,8 +82,7 @@ export function TicketListPage() {
   const setSort = useCallback(
     (next: SortState) => {
       updateParams((params) => {
-        params.set('sort', next.key);
-        params.set('direction', next.direction);
+        params.set('sort', `${next.key},${next.direction}`);
       });
     },
     [updateParams],
@@ -129,6 +116,7 @@ export function TicketListPage() {
       : 1;
 
   const errorMessage = ticketsQuery.isError ? describeApiError(ticketsQuery.error, 'Unable to load tickets.') : null;
+  const items = ticketsQuery.data?.items ?? [];
 
   return (
     <section className="ticket-list-page">
@@ -194,14 +182,14 @@ export function TicketListPage() {
 
       {ticketsQuery.data && (
         <>
-          <TicketTable tickets={sortedItems} />
+          <TicketTable tickets={items} />
           <Pagination
             page={page}
             totalPages={totalPages}
             totalItems={ticketsQuery.data.total}
             onChange={setPage}
           />
-          {sortedItems.length === 0 && ticketsQuery.data.total === 0 && (
+          {items.length === 0 && ticketsQuery.data.total === 0 && (
             <p className="ticket-list-empty">No tickets match your filters.</p>
           )}
         </>
@@ -243,33 +231,17 @@ function SortControl({
   return (
     <fieldset className="ticket-list-sort">
       <legend>Sort</legend>
-      <label>
-        <input
-          type="radio"
-          name="ticket-sort"
-          checked={value.key === 'severity'}
-          onChange={() => onChange({ key: 'severity', direction: value.direction })}
-        />
-        Severity
-      </label>
-      <label>
-        <input
-          type="radio"
-          name="ticket-sort"
-          checked={value.key === 'state'}
-          onChange={() => onChange({ key: 'state', direction: value.direction })}
-        />
-        State
-      </label>
-      <label>
-        <input
-          type="radio"
-          name="ticket-sort"
-          checked={value.key === 'age'}
-          onChange={() => onChange({ key: 'age', direction: value.direction })}
-        />
-        Age
-      </label>
+      {(Object.keys(SORT_LABELS) as SortKey[]).map((key) => (
+        <label key={key}>
+          <input
+            type="radio"
+            name="ticket-sort"
+            checked={value.key === key}
+            onChange={() => onChange({ key, direction: value.direction })}
+          />
+          {SORT_LABELS[key]}
+        </label>
+      ))}
       <button
         type="button"
         className="ticket-list-sort-toggle"
@@ -356,28 +328,11 @@ function Pagination({
   );
 }
 
-function sortTickets(tickets: Ticket[], sort: SortState): Ticket[] {
-  const direction = sort.direction === 'asc' ? 1 : -1;
-  return [...tickets].sort((a, b) => {
-    let comparison = 0;
-    if (sort.key === 'severity') {
-      comparison = SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity];
-    } else if (sort.key === 'state') {
-      comparison = STATE_ORDER[a.state] - STATE_ORDER[b.state];
-    } else {
-      comparison = a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : 0;
-    }
-    if (comparison === 0) {
-      comparison = a.id - b.id;
-    }
-    return comparison * direction;
-  });
-}
-
-function readSort(sortParam: string | null, dirParam: string | null): SortState {
-  if (sortParam === 'severity' || sortParam === 'state' || sortParam === 'age') {
-    const direction = dirParam === 'asc' ? 'asc' : 'desc';
-    return { key: sortParam, direction };
+function readSort(sortParam: string | null): SortState {
+  if (!sortParam) return DEFAULT_SORT;
+  const [key, direction] = sortParam.split(',');
+  if (key === 'severity' || key === 'state' || key === 'createdAt') {
+    return { key, direction: direction === 'asc' ? 'asc' : 'desc' };
   }
   return DEFAULT_SORT;
 }

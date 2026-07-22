@@ -116,6 +116,7 @@ export const apiClient = {
     if (params.assignee !== undefined) search.set('assignee', String(params.assignee));
     if (params.tag && params.tag.trim()) search.set('tag', params.tag);
     if (params.search && params.search.trim()) search.set('search', params.search.trim());
+    if (params.sort && params.sort.trim()) search.set('sort', params.sort.trim());
     if (params.page !== undefined) search.set('page', String(params.page));
     if (params.size !== undefined) search.set('size', String(params.size));
     const query = search.toString();
