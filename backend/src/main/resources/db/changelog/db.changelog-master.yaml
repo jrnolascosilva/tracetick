@@ -9,3 +9,5 @@ databaseChangeLog:
       file: db/changelog/0004-tickets-and-events.yaml
   - include:
       file: db/changelog/0005-ticket-watchers.yaml
+  - include:
+      file: db/changelog/0006-ingestion-configurations.yaml
