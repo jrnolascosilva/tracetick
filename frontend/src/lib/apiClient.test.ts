@@ -182,4 +182,89 @@ describe('apiClient tickets', () => {
     expect(detail.ticket.id).toBe(42);
     expect(detail.events).toHaveLength(1);
   });
+
+  it('creates a ticket with the create wire shape and returns the new ticket', async () => {
+    let observed: { url: string; body: unknown } | null = null;
+    server.use(
+      http.post('/api/v1/tickets', async ({ request }) => {
+        observed = { url: request.url, body: await request.json() };
+        return HttpResponse.json(
+          {
+            id: 42,
+            origin: 'HUMAN',
+            reporterUserId: 1,
+            assigneeUserId: null,
+            title: 'API is down',
+            description: 'All endpoints returning 500.',
+            severity: 'HIGH',
+            state: 'OPEN',
+            refireCount: 0,
+            createdAt: '2026-01-02T03:04:05.000Z',
+            updatedAt: '2026-01-02T03:04:05.000Z',
+            resolvedAt: null,
+            closedAt: null,
+            tags: [{ key: 'service', value: 'api' }],
+          },
+          { status: 201 },
+        );
+      }),
+    );
+
+    const created = await apiClient.createTicket({
+      title: 'API is down',
+      description: 'All endpoints returning 500.',
+      severity: 'HIGH',
+      tags: [{ key: 'service', value: 'api' }],
+    });
+
+    expect(created.id).toBe(42);
+    expect(created.title).toBe('API is down');
+    expect(observed).not.toBeNull();
+    expect(observed!.url).toContain('/api/v1/tickets');
+    expect(observed!.body).toEqual({
+      title: 'API is down',
+      description: 'All endpoints returning 500.',
+      severity: 'HIGH',
+      tags: [{ key: 'service', value: 'api' }],
+    });
+  });
+
+  it('throws ApiError when create-ticket returns a validation error', async () => {
+    server.use(
+      http.post('/api/v1/tickets', () =>
+        new HttpResponse('title must not be blank', { status: 400 }),
+      ),
+    );
+
+    await expect(
+      apiClient.createTicket({
+        title: '',
+        description: 'desc',
+        severity: 'MEDIUM',
+        tags: [],
+      }),
+    ).rejects.toBeInstanceOf(ApiError);
+  });
+
+  it('still surfaces a server-side rejection when an invalid tag key reaches POST /tickets', async () => {
+    server.use(
+      http.post('/api/v1/tickets', () =>
+        new HttpResponse('Invalid tag key: must match [a-z0-9_-]{1,32}', {
+          status: 400,
+        }),
+      ),
+    );
+
+    await expect(
+      apiClient.createTicket({
+        title: 'API is down',
+        description: 'All endpoints returning 500.',
+        severity: 'MEDIUM',
+        tags: [{ key: 'BAD KEY', value: 'api' }],
+      }),
+    ).rejects.toMatchObject({
+      status: 400,
+      message: expect.stringContaining('Invalid tag key'),
+    });
+  });
 });

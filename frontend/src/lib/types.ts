@@ -105,3 +105,10 @@ export interface ListTicketsParams {
   page?: number;
   size?: number;
 }
+
+export interface CreateTicketRequest {
+  title: string;
+  description: string;
+  severity: Severity;
+  tags: Tag[];
+}
