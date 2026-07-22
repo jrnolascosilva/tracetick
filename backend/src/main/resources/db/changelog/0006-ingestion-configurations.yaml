@@ -1,0 +1,81 @@
+databaseChangeLog:
+  - changeSet:
+      id: 0006-ingestion-configurations
+      author: tracetick
+      comment: |
+        T9 — IngestionConfiguration backend.
+        Adds `ingestion_configurations`. Each row is one webhook source: a unique
+        `url_token` (the last URL segment of `/api/v1/ingest/:url_token`), an `hmac_secret`
+        used to verify the `X-TraceTick-Signature` header (per ADR-0005), and defaults
+        applied to tickets created from incoming webhooks.
+
+        The receiver endpoint itself, the HMAC signature verification, the fingerprint
+        dedup, the severity/label extraction, and the `refire_count` increments land in T10
+        and consume this table; this changeset only persists the admin-supplied row.
+
+        Defaults shape (`default_tags` JSONB): object form
+            { "service": "api", "env": "prod" }
+        which round-trips as `Map<String, String>` on the entity. Validation against that
+        shape lives in the service layer (T9); the table just stores it.
+      changes:
+        - createTable:
+            tableName: ingestion_configurations
+            columns:
+              - column:
+                  name: id
+                  type: bigint
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: name
+                  type: varchar(255)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: url_token
+                  type: varchar(64)
+                  constraints:
+                    nullable: false
+                    unique: true
+                    uniqueConstraintName: uk_ingestion_configurations_url_token
+              - column:
+                  name: hmac_secret
+                  type: varchar(128)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: default_severity
+                  type: varchar(16)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: default_assignee_user_id
+                  type: bigint
+                  constraints:
+                    foreignKeyName: fk_ingestion_configurations_default_assignee
+                    references: users(id)
+              - column:
+                  name: default_tags
+                  type: jsonb
+              - column:
+                  name: active
+                  type: boolean
+                  defaultValueBoolean: true
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: timestamp with time zone
+                  constraints:
+                    nullable: false
+        - createIndex:
+            tableName: ingestion_configurations
+            indexName: idx_ingestion_configurations_active
+            columns:
+              - column:
+                  name: active
+      rollback:
+        - dropTable:
+            tableName: ingestion_configurations
