@@ -1,4 +1,5 @@
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useState, type FormEvent } from 'react';
 import { Link, useParams } from 'react-router-dom';
 
 import { StateBadge, SeverityBadge } from '@/components/TicketBadges';
@@ -6,7 +7,7 @@ import { eventPresentation } from '@/components/TimelinePresentation';
 import { ApiError, apiClient } from '@/lib/apiClient';
 import { useAuth } from '@/lib/auth';
 import { describeApiError } from '@/lib/errors';
-import type { TicketEvent as TicketEventModel } from '@/lib/types';
+import type { TicketDetail, TicketEvent as TicketEventModel, User } from '@/lib/types';
 
 export function TicketDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -51,6 +52,7 @@ export function TicketDetailPage() {
   }
 
   const { ticket, events, watcherIds } = detailQuery.data;
+  const canComment = canCommentOnTicket(auth.user, ticket.reporterUserId, watcherIds);
 
   return (
     <section className="ticket-detail-page">
@@ -111,8 +113,104 @@ export function TicketDetailPage() {
             </ol>
           )}
       </section>
+
+      {canComment && <CommentForm ticketId={ticketId} />}
     </section>
   );
+}
+
+function canCommentOnTicket(
+  user: User | null,
+  reporterUserId: number | null,
+  watcherIds: number[],
+): boolean {
+  if (!user) return false;
+  if (user.role === 'TECHNICIAN') return true;
+  if (reporterUserId != null && reporterUserId === user.id) return true;
+  return watcherIds.includes(user.id);
+}
+
+function CommentForm({ ticketId }: { ticketId: number }) {
+  const queryClient = useQueryClient();
+  const [draft, setDraft] = useState('');
+  const [serverError, setServerError] = useState<string | null>(null);
+
+  const detailQueryKey = ['tickets', ticketId] as const;
+
+  const commentMutation = useMutation({
+    mutationFn: (body: string) => apiClient.addComment(ticketId, body),
+    onSuccess: (event) => {
+      appendEventToCache(queryClient, detailQueryKey, event);
+      setDraft('');
+      setServerError(null);
+    },
+  });
+
+  const submitting = commentMutation.isPending;
+  const error =
+    serverError ??
+    (commentMutation.isError
+      ? describeApiError(commentMutation.error, 'Unable to post the comment.')
+      : null);
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const body = draft.trim();
+    if (!body || submitting) {
+      return;
+    }
+    setServerError(null);
+    try {
+      await commentMutation.mutateAsync(body);
+    } catch (err) {
+      setServerError(describeApiError(err, 'Unable to post the comment.'));
+    }
+  }
+
+  return (
+    <form className="ticket-detail-comment-form" onSubmit={handleSubmit}>
+      <label>
+        Add a comment
+        <textarea
+          name="comment"
+          rows={3}
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+          disabled={submitting}
+          placeholder="Share an update with the team…"
+        />
+      </label>
+      {error && <p role="alert" className="ticket-detail-comment-error">{error}</p>}
+      <button type="submit" disabled={submitting || draft.trim() === ''}>
+        {submitting ? 'Posting…' : 'Post comment'}
+      </button>
+    </form>
+  );
+}
+
+function appendEventToCache(
+  queryClient: ReturnType<typeof useQueryClient>,
+  queryKey: readonly ['tickets', number],
+  event: TicketEventModel,
+): void {
+  queryClient.setQueryData<TicketDetail | undefined>(queryKey, (current) => {
+    if (!current) {
+      return current;
+    }
+    if (current.events.some((existing) => existing.id === event.id)) {
+      return current;
+    }
+    const merged = [...current.events, event];
+    merged.sort(compareEventsByCreatedAt);
+    return { ...current, events: merged };
+  });
+}
+
+function compareEventsByCreatedAt(a: TicketEventModel, b: TicketEventModel): number {
+  if (a.createdAt === b.createdAt) {
+    return a.id - b.id;
+  }
+  return a.createdAt < b.createdAt ? -1 : 1;
 }
 
 function TimelineEntry({ event }: { event: TicketEventModel }) {

@@ -2,7 +2,12 @@ import { http, HttpResponse } from 'msw';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ApiError, apiClient } from '@/lib/apiClient';
-import type { PasswordResetConfirmRequest, PasswordResetRequest, PasswordResetResponse } from '@/lib/types';
+import type {
+  PasswordResetConfirmRequest,
+  PasswordResetRequest,
+  PasswordResetResponse,
+  TicketEvent,
+} from '@/lib/types';
 import { server } from '@/test/server';
 
 describe('apiClient password reset', () => {
@@ -266,5 +271,40 @@ describe('apiClient tickets', () => {
       status: 400,
       message: expect.stringContaining('Invalid tag key'),
     });
+  });
+
+  it('posts a comment with the wire shape and returns the appended event', async () => {
+    let observed: { url: string; body: unknown } | null = null;
+    const createdEvent: TicketEvent = {
+      id: 99,
+      type: 'COMMENT',
+      actorUserId: 7,
+      payload: { body: 'Looking into it now.' },
+      createdAt: '2026-01-02T04:00:00.000Z',
+    };
+
+    server.use(
+      http.post('/api/v1/tickets/42/comments', async ({ request }) => {
+        observed = { url: request.url, body: await request.json() };
+        return HttpResponse.json(createdEvent, { status: 201 });
+      }),
+    );
+
+    const event = await apiClient.addComment(42, 'Looking into it now.');
+
+    expect(event).toEqual(createdEvent);
+    expect(observed).not.toBeNull();
+    expect(observed!.url).toContain('/api/v1/tickets/42/comments');
+    expect(observed!.body).toEqual({ body: 'Looking into it now.' });
+  });
+
+  it('surfaces a 404 from the comments endpoint as an ApiError', async () => {
+    server.use(
+      http.post('/api/v1/tickets/42/comments', () =>
+        new HttpResponse(null, { status: 404 }),
+      ),
+    );
+
+    await expect(apiClient.addComment(42, 'hello')).rejects.toBeInstanceOf(ApiError);
   });
 });
