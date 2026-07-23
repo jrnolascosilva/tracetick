@@ -9,6 +9,7 @@ import type {
   PasswordResetResponse,
   Ticket,
   TicketDetail,
+  TicketEvent,
   UpdateUserRequest,
   User,
 } from '@/lib/types';
@@ -131,6 +132,12 @@ export const apiClient = {
     return request<Ticket>('/tickets', {
       method: 'POST',
       body: JSON.stringify(body),
+    });
+  },
+  addComment(ticketId: number, body: string): Promise<TicketEvent> {
+    return request<TicketEvent>(`/tickets/${ticketId}/comments`, {
+      method: 'POST',
+      body: JSON.stringify({ body }),
     });
   },
 };
