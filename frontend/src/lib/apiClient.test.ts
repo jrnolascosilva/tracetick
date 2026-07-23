@@ -3,10 +3,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ApiError, apiClient } from '@/lib/apiClient';
 import type {
+  CreateIngestionConfigurationRequest,
+  IngestionConfiguration,
+  IngestionConfigurationWithSecret,
   PasswordResetConfirmRequest,
   PasswordResetRequest,
   PasswordResetResponse,
   TicketEvent,
+  UpdateIngestionConfigurationRequest,
 } from '@/lib/types';
 import { server } from '@/test/server';
 
@@ -306,5 +310,143 @@ describe('apiClient tickets', () => {
     );
 
     await expect(apiClient.addComment(42, 'hello')).rejects.toBeInstanceOf(ApiError);
+  });
+});
+
+describe('apiClient ingestion configurations', () => {
+  function makeConfig(overrides: Partial<IngestionConfiguration> = {}): IngestionConfiguration {
+    return {
+      id: 7,
+      name: 'PagerDuty',
+      urlToken: 'tok_abc123',
+      webhookUrl: '/api/v1/ingest/tok_abc123',
+      defaultSeverity: 'HIGH',
+      defaultAssigneeUserId: null,
+      defaultTags: { service: 'api' },
+      active: true,
+      createdAt: '2026-01-02T03:04:05.000Z',
+      ...overrides,
+    };
+  }
+
+  function makeCreatedConfig(
+    overrides: Partial<IngestionConfigurationWithSecret> = {},
+  ): IngestionConfigurationWithSecret {
+    return {
+      ...makeConfig({ id: 7 }),
+      hmacSecret: 'super-secret-token-xyz',
+      ...overrides,
+    };
+  }
+
+  it('lists ingestion configurations', async () => {
+    server.use(
+      http.get('/api/v1/ingestion-configurations', () =>
+        HttpResponse.json([makeConfig({ id: 1 }), makeConfig({ id: 2, name: 'Sentry' })]),
+      ),
+    );
+
+    const list = await apiClient.listIngestionConfigurations();
+
+    expect(list).toHaveLength(2);
+    expect(list[0].id).toBe(1);
+    expect(list[1].name).toBe('Sentry');
+  });
+
+  it('creates an ingestion configuration with the create wire shape and returns the secret once', async () => {
+    let observed: { url: string; body: unknown } | null = null;
+    server.use(
+      http.post('/api/v1/ingestion-configurations', async ({ request }) => {
+        observed = { url: request.url, body: await request.json() };
+        return HttpResponse.json(makeCreatedConfig({ id: 9, name: 'New one' }), {
+          status: 201,
+        });
+      }),
+    );
+
+    const body: CreateIngestionConfigurationRequest = {
+      name: 'New one',
+      defaultSeverity: 'MEDIUM',
+      defaultAssigneeUserId: 3,
+      defaultTags: { env: 'prod' },
+    };
+
+    const created = await apiClient.createIngestionConfiguration(body);
+
+    expect(created.id).toBe(9);
+    expect(created.hmacSecret).toBe('super-secret-token-xyz');
+    expect(observed).not.toBeNull();
+    expect(observed!.url).toContain('/api/v1/ingestion-configurations');
+    expect(observed!.body).toEqual({
+      name: 'New one',
+      defaultSeverity: 'MEDIUM',
+      defaultAssigneeUserId: 3,
+      defaultTags: { env: 'prod' },
+    });
+  });
+
+  it('omits blank fields from the create wire body', async () => {
+    let observed: { body: unknown } | null = null;
+    server.use(
+      http.post('/api/v1/ingestion-configurations', async ({ request }) => {
+        observed = { body: await request.json() };
+        return HttpResponse.json(makeCreatedConfig(), { status: 201 });
+      }),
+    );
+
+    await apiClient.createIngestionConfiguration({ name: 'Just a name' });
+
+    expect(observed!.body).toEqual({ name: 'Just a name' });
+  });
+
+  it('patches an ingestion configuration without rotating the secret', async () => {
+    let observed: { url: string; body: unknown } | null = null;
+    server.use(
+      http.patch('/api/v1/ingestion-configurations/7', async ({ request }) => {
+        observed = { url: request.url, body: await request.json() };
+        return HttpResponse.json(makeConfig({ name: 'Renamed', active: false }));
+      }),
+    );
+
+    const body: UpdateIngestionConfigurationRequest = {
+      name: 'Renamed',
+      active: false,
+    };
+
+    const updated = await apiClient.updateIngestionConfiguration(7, body);
+
+    expect(updated.name).toBe('Renamed');
+    expect(updated.active).toBe(false);
+    expect(observed).not.toBeNull();
+    expect(observed!.url).toContain('/api/v1/ingestion-configurations/7');
+    expect(observed!.body).toEqual({ name: 'Renamed', active: false });
+  });
+
+  it('patches an ingestion configuration and returns the new secret when rotating', async () => {
+    let observed: { body: unknown } | null = null;
+    server.use(
+      http.patch('/api/v1/ingestion-configurations/7', async ({ request }) => {
+        observed = { body: await request.json() };
+        return HttpResponse.json({
+          ...makeConfig({ id: 7 }),
+          hmacSecret: 'rotated-secret-abc',
+        });
+      }),
+    );
+
+    const rotated = await apiClient.updateIngestionConfiguration(7, { rotateSecret: true });
+
+    expect(rotated.hmacSecret).toBe('rotated-secret-abc');
+    expect(observed!.body).toEqual({ rotateSecret: true });
+  });
+
+  it('surfaces a 403 from listIngestionConfigurations as an ApiError', async () => {
+    server.use(
+      http.get('/api/v1/ingestion-configurations', () =>
+        new HttpResponse('forbidden', { status: 403 }),
+      ),
+    );
+
+    await expect(apiClient.listIngestionConfigurations()).rejects.toBeInstanceOf(ApiError);
   });
 });

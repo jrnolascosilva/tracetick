@@ -112,3 +112,35 @@ export interface CreateTicketRequest {
   severity: Severity;
   tags: Tag[];
 }
+
+export interface IngestionConfiguration {
+  id: number;
+  name: string;
+  urlToken: string;
+  webhookUrl: string;
+  defaultSeverity: Severity;
+  defaultAssigneeUserId: number | null;
+  defaultTags: Record<string, string>;
+  active: boolean;
+  createdAt: string;
+}
+
+export interface IngestionConfigurationWithSecret extends IngestionConfiguration {
+  hmacSecret: string;
+}
+
+export interface CreateIngestionConfigurationRequest {
+  name: string;
+  defaultSeverity?: Severity;
+  defaultAssigneeUserId?: number | null;
+  defaultTags?: Record<string, string>;
+}
+
+export interface UpdateIngestionConfigurationRequest {
+  name?: string;
+  defaultSeverity?: Severity;
+  defaultAssigneeUserId?: number | null;
+  defaultTags?: Record<string, string>;
+  active?: boolean;
+  rotateSecret?: boolean;
+}

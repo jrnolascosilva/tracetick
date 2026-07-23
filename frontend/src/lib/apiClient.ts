@@ -1,6 +1,9 @@
 import type {
+  CreateIngestionConfigurationRequest,
   CreateTicketRequest,
   CreateUserRequest,
+  IngestionConfiguration,
+  IngestionConfigurationWithSecret,
   ListTicketsParams,
   LoginRequest,
   Page,
@@ -10,6 +13,7 @@ import type {
   Ticket,
   TicketDetail,
   TicketEvent,
+  UpdateIngestionConfigurationRequest,
   UpdateUserRequest,
   User,
 } from '@/lib/types';
@@ -138,6 +142,41 @@ export const apiClient = {
     return request<TicketEvent>(`/tickets/${ticketId}/comments`, {
       method: 'POST',
       body: JSON.stringify({ body }),
+    });
+  },
+  listIngestionConfigurations(): Promise<IngestionConfiguration[]> {
+    return request<IngestionConfiguration[]>('/ingestion-configurations');
+  },
+  createIngestionConfiguration(
+    body: CreateIngestionConfigurationRequest,
+  ): Promise<IngestionConfigurationWithSecret> {
+    const payload: Record<string, unknown> = { name: body.name };
+    if (body.defaultSeverity) payload.defaultSeverity = body.defaultSeverity;
+    if (body.defaultAssigneeUserId !== undefined) {
+      payload.defaultAssigneeUserId = body.defaultAssigneeUserId;
+    }
+    if (body.defaultTags) payload.defaultTags = body.defaultTags;
+    return request<IngestionConfigurationWithSecret>('/ingestion-configurations', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+  updateIngestionConfiguration(
+    id: number,
+    body: UpdateIngestionConfigurationRequest,
+  ): Promise<IngestionConfigurationWithSecret> {
+    const payload: Record<string, unknown> = {};
+    if (body.name !== undefined) payload.name = body.name;
+    if (body.defaultSeverity) payload.defaultSeverity = body.defaultSeverity;
+    if (body.defaultAssigneeUserId !== undefined) {
+      payload.defaultAssigneeUserId = body.defaultAssigneeUserId;
+    }
+    if (body.defaultTags) payload.defaultTags = body.defaultTags;
+    if (body.active !== undefined) payload.active = body.active;
+    if (body.rotateSecret !== undefined) payload.rotateSecret = body.rotateSecret;
+    return request<IngestionConfigurationWithSecret>(`/ingestion-configurations/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
     });
   },
 };
