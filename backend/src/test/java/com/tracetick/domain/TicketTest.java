@@ -3,6 +3,7 @@ package com.tracetick.domain;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
@@ -395,5 +396,99 @@ class TicketTest {
         User reporter = User.create(customer, "reporter@tracetick.local", "hash", Role.CUSTOMER);
         return Ticket.createHuman(customer, reporter,
                 "API down", "API returns 500", Severity.MEDIUM, List.of());
+    }
+
+    @Test
+    void createWebhookStoresOriginFingerprintPayloadAndInheritsDefaults() {
+        Customer customer = Customer.create("TraceTick", "ops@tracetick.local");
+        IngestionConfiguration config = IngestionConfiguration.create("PagerDuty", "tok", "secret",
+                Severity.MEDIUM, null, Map.of());
+        Map<String, Object> payload = Map.of("alertname", "HighCPU", "severity", "critical");
+        Tag service = Tag.of("service", "api");
+
+        Ticket ticket = Ticket.createWebhook(customer, null, config, "API down",
+                "API returns 500", Severity.HIGH, "ingestion:1:abc", payload,
+                List.of(service));
+
+        assertThat(ticket.getOrigin()).isEqualTo(TicketOrigin.WEBHOOK);
+        assertThat(ticket.getReporter()).isNull();
+        assertThat(ticket.getFingerprint()).isEqualTo("ingestion:1:abc");
+        assertThat(ticket.getRawPayload()).isSameAs(payload);
+        assertThat(ticket.getRefireCount()).isZero();
+        assertThat(ticket.getState()).isEqualTo(TicketState.OPEN);
+        assertThat(ticket.getSeverity()).isEqualTo(Severity.HIGH);
+        assertThat(ticket.getTags()).contains(service);
+        assertThat(ticket.getIngestionConfiguration()).isSameAs(config);
+    }
+
+    @Test
+    void createWebhookAppliesDefaultAssigneeWhenProvided() {
+        Customer customer = Customer.create("TraceTick", "ops@tracetick.local");
+        User tech = User.create(customer, "tech@tracetick.local", "h", Role.TECHNICIAN);
+        IngestionConfiguration config = IngestionConfiguration.create("PagerDuty", "tok", "secret",
+                Severity.MEDIUM, tech, Map.of());
+
+        Ticket ticket = Ticket.createWebhook(customer, tech, config, "API down", "API returns 500",
+                Severity.MEDIUM, "ingestion:1:abc", Map.of(), List.of());
+
+        assertThat(ticket.getAssignee()).isSameAs(tech);
+    }
+
+    @Test
+    void createWebhookDefaultsSeverityToMediumWhenNull() {
+        Customer customer = Customer.create("TraceTick", "ops@tracetick.local");
+        IngestionConfiguration config = IngestionConfiguration.create("PagerDuty", "tok", "secret",
+                Severity.MEDIUM, null, Map.of());
+
+        Ticket ticket = Ticket.createWebhook(customer, null, config, "x", "y", null,
+                "ingestion:1:abc", Map.of(), List.of());
+
+        assertThat(ticket.getSeverity()).isEqualTo(Severity.MEDIUM);
+    }
+
+    @Test
+    void recordRefireIncrementsCounterAndAppendsRefireEventWithCountAndTimestamp() {
+        Ticket ticket = newWebhookTicket();
+        int beforeCount = ticket.getRefireCount();
+
+        TicketEvent event = ticket.recordRefire();
+
+        assertThat(ticket.getRefireCount()).isEqualTo(beforeCount + 1);
+        assertThat(event.getType()).isEqualTo(EventType.REFIRE);
+        assertThat(event.getActor()).isNull();
+        assertThat(event.getPayload())
+                .containsEntry("refire_count", beforeCount + 1)
+                .containsKey("received_at");
+        assertThat(event.getPayload())
+                .as("REFIRE payload shape is locked by ADR-0004 to {refire_count, received_at}")
+                .doesNotContainKey("raw_payload");
+    }
+
+    @Test
+    void recordRefireCanBeCalledMultipleTimesIncrementingEachTime() {
+        Ticket ticket = newWebhookTicket();
+
+        ticket.recordRefire();
+        ticket.recordRefire();
+        ticket.recordRefire();
+
+        assertThat(ticket.getRefireCount()).isEqualTo(3);
+        List<TicketEvent> refires = ticket.getNewEvents().stream()
+                .filter(e -> e.getType() == EventType.REFIRE)
+                .toList();
+        assertThat(refires).hasSize(3);
+        assertThat(refires.get(0).getPayload()).containsEntry("refire_count", 1);
+        assertThat(refires.get(1).getPayload()).containsEntry("refire_count", 2);
+        assertThat(refires.get(2).getPayload()).containsEntry("refire_count", 3);
+    }
+
+    private static Ticket newWebhookTicket() {
+        Customer customer = Customer.create("TraceTick", "ops@tracetick.local");
+        IngestionConfiguration config = IngestionConfiguration.create("PagerDuty", "tok", "secret",
+                Severity.MEDIUM, null, Map.of());
+        return Ticket.createWebhook(customer, null, config, "API down", "API returns 500",
+                Severity.HIGH, "ingestion:1:abc",
+                Map.of("alertname", "HighCPU", "severity", "critical"),
+                List.of());
     }
 }
