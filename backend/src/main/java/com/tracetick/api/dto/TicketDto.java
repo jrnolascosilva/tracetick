@@ -1,5 +1,7 @@
 package com.tracetick.api.dto;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonInclude.Include;
 import com.tracetick.domain.Severity;
 import com.tracetick.domain.Tag;
 import com.tracetick.domain.Ticket;
@@ -8,8 +10,16 @@ import com.tracetick.domain.TicketState;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
+/**
+ * {@code fingerprint}, {@code rawPayload}, and {@code ingestionConfigurationId} are
+ * non-null only on WEBHOOK-origin tickets (HUMAN-origin tickets carry no payload and no
+ * source configuration). All three are omitted from JSON via {@link Include#NON_NULL} so
+ * list views of mixed-origin tickets stay compact.
+ */
+@JsonInclude(Include.NON_NULL)
 public record TicketDto(
         Long id,
         TicketOrigin origin,
@@ -20,6 +30,9 @@ public record TicketDto(
         Severity severity,
         TicketState state,
         int refireCount,
+        String fingerprint,
+        Long ingestionConfigurationId,
+        Map<String, Object> rawPayload,
         Instant createdAt,
         Instant updatedAt,
         Instant resolvedAt,
@@ -38,6 +51,13 @@ public record TicketDto(
                 ticket.getSeverity(),
                 ticket.getState(),
                 ticket.getRefireCount(),
+                ticket.getFingerprint(),
+                ticket.getIngestionConfiguration() == null
+                        ? null
+                        : ticket.getIngestionConfiguration().getId(),
+                ticket.getRawPayload() == null || ticket.getRawPayload().isEmpty()
+                        ? null
+                        : ticket.getRawPayload(),
                 ticket.getCreatedAt(),
                 ticket.getUpdatedAt(),
                 ticket.getResolvedAt(),

@@ -52,6 +52,10 @@ public class Ticket {
     private TicketOrigin origin;
 
     @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "ingestion_config_id")
+    private IngestionConfiguration ingestionConfiguration;
+
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "reporter_user_id")
     private User reporter;
 
@@ -126,7 +130,7 @@ public class Ticket {
     private Ticket(Customer customer, TicketOrigin origin, User reporter, User assignee,
                    String title, String description, Severity severity, TicketState state,
                    String fingerprint, int refireCount, Map<String, Object> rawPayload,
-                   Instant createdAt, Set<Tag> tags) {
+                   Instant createdAt, Set<Tag> tags, IngestionConfiguration ingestionConfiguration) {
         this.customer = customer;
         this.origin = origin;
         this.reporter = reporter;
@@ -142,6 +146,7 @@ public class Ticket {
         this.updatedAt = createdAt;
         this.resolvedAt = null;
         this.closedAt = null;
+        this.ingestionConfiguration = ingestionConfiguration;
         if (tags != null && !tags.isEmpty()) {
             this.tags.addAll(tags);
         }
@@ -156,7 +161,27 @@ public class Ticket {
         Set<Tag> tagSet = tags == null ? Set.of() : new HashSet<>(tags);
         return new Ticket(customer, TicketOrigin.HUMAN, reporter, null,
                 title, description, severity, TicketState.OPEN,
-                null, 0, null, now, tagSet);
+                null, 0, null, now, tagSet, null);
+    }
+
+    public static Ticket createWebhook(Customer customer,
+                                       User defaultAssignee,
+                                       IngestionConfiguration ingestionConfiguration,
+                                       String title,
+                                       String description,
+                                       Severity severity,
+                                       String fingerprint,
+                                       Map<String, Object> rawPayload,
+                                       List<Tag> tags) {
+        if (severity == null) {
+            severity = Severity.MEDIUM;
+        }
+        Instant now = Instant.now();
+        Set<Tag> tagSet = tags == null ? Set.of() : new HashSet<>(tags);
+        return new Ticket(customer, TicketOrigin.WEBHOOK, null, defaultAssignee,
+                title, description, severity, TicketState.OPEN,
+                fingerprint, 0, rawPayload == null ? Map.of() : rawPayload, now, tagSet,
+                ingestionConfiguration);
     }
 
     public void transitionTo(TicketState target, User actor) {
@@ -203,6 +228,22 @@ public class Ticket {
 
     public TicketEvent appendComment(User author, String body) {
         return appendInternalEvent(EventType.COMMENT, author, Map.of("body", body));
+    }
+
+    /**
+     * Records a re-fire of the same alert against this Ticket. Increments {@code refireCount}
+     * by one and appends a {@link EventType#REFIRE} event with payload
+     * {@code {refire_count, received_at}} per ADR-0004. The raw webhook payload remains on
+     * {@link #getRawPayload()} (set at first fire) — it is not duplicated on the REFIRE
+     * event. State is left untouched: a re-fire while RESOLVED does not auto-reopen.
+     */
+    public TicketEvent recordRefire() {
+        this.refireCount += 1;
+        this.updatedAt = Instant.now();
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("refire_count", this.refireCount);
+        payload.put("received_at", this.updatedAt.toString());
+        return appendInternalEvent(EventType.REFIRE, null, payload);
     }
 
     public boolean addTag(Tag tag, User actor) {

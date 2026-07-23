@@ -1,0 +1,45 @@
+databaseChangeLog:
+  - changeSet:
+      id: 0007-ticket-webhook-ingest
+      author: tracetick
+      comment: |
+        T10 — Webhook ingest.
+
+        Adds `tickets.ingestion_config_id` (FK to `ingestion_configurations`) so a
+        WEBHOOK-origin ticket can be traced back to its source. Nullable: HUMAN-origin
+        tickets have no ingestion configuration.
+
+        Adds a composite `(fingerprint, state)` index — the dedup query in
+        `WebhookIngestService` is "single SQL query, indexed on (fingerprint, state)"
+        per ADR-0004.
+
+        REFIRE event payload shape (documented per ADR-0003 "Each event type's
+        payload shape is defined once, in a changelog comment"):
+          { "refire_count": <int>, "received_at": <iso-8601 string> }
+        The raw webhook payload is stored on `tickets.raw_payload` (set at first fire)
+        and is NOT duplicated on the REFIRE event.
+      changes:
+        - addColumn:
+            tableName: tickets
+            columns:
+              - column:
+                  name: ingestion_config_id
+                  type: bigint
+                  constraints:
+                    foreignKeyName: fk_tickets_ingestion_config
+                    references: ingestion_configurations(id)
+        - createIndex:
+            tableName: tickets
+            indexName: idx_tickets_fingerprint_state
+            columns:
+              - column:
+                  name: fingerprint
+              - column:
+                  name: state
+      rollback:
+        - dropIndex:
+            tableName: tickets
+            indexName: idx_tickets_fingerprint_state
+        - dropColumn:
+            tableName: tickets
+            columnName: ingestion_config_id
