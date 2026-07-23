@@ -29,10 +29,12 @@ export const routes: RouteObject[] = [
           { path: 'tickets', element: <TicketListPage /> },
           { path: 'tickets/new', element: <NewTicketPage /> },
           { path: 'tickets/:id', element: <TicketDetailPage /> },
-          { path: 'ingestion-configurations', element: <IngestionConfigurationsPage /> },
           {
             element: <RequireAuth adminOnly />,
-            children: [{ path: 'admin/users', element: <UserAdminPage /> }],
+            children: [
+              { path: 'ingestion-configurations', element: <IngestionConfigurationsPage /> },
+              { path: 'admin/users', element: <UserAdminPage /> },
+            ],
           },
           { path: '*', element: <Navigate to="/" replace /> },
         ],
