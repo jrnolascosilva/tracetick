@@ -34,6 +34,11 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-validation")
     implementation("org.springframework.boot:spring-boot-starter-actuator")
     implementation("org.liquibase:liquibase-core")
+    // springdoc-openapi: serves the OpenAPI 3 JSON at /v3/api-docs and Swagger UI at
+    // /swagger-ui.html. Reflection-driven — no annotations needed on existing controllers.
+    // Version 2.8.6 pins Spring Boot 3.4.4 in its own build, which is binary-compatible
+    // with our 3.4.1. See ADR-0007 for the rationale.
+    implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.6")
     runtimeOnly("org.postgresql:postgresql")
 
     // Lombok: annotation-processor only — generated getters/setters are bytecode, not a
