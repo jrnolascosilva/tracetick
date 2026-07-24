@@ -634,6 +634,40 @@ p {
   padding: 16px;
 }
 
+.ticket-detail-transitions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: #fff;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  padding: 16px;
+}
+
+.ticket-detail-transition-button {
+  align-self: flex-start;
+  background: var(--color-accent);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 14px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.ticket-detail-transition-button:disabled {
+  background: #93c1ec;
+  cursor: progress;
+}
+
+.ticket-detail-transition-error {
+  color: #b3261e;
+  background: #fce8e6;
+  padding: 6px 10px;
+  border-radius: 4px;
+  margin: 0;
+}
+
 .ticket-detail-comment-form label {
   display: flex;
   flex-direction: column;

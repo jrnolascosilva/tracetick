@@ -7,7 +7,19 @@ import { eventPresentation } from '@/components/TimelinePresentation';
 import { ApiError, apiClient } from '@/lib/apiClient';
 import { useAuth } from '@/lib/auth';
 import { describeApiError } from '@/lib/errors';
-import type { TicketDetail, TicketEvent as TicketEventModel, User } from '@/lib/types';
+import type {
+  TicketDetail,
+  TicketEvent as TicketEventModel,
+  TicketState,
+  User,
+} from '@/lib/types';
+
+const NEXT_STATE_LABEL: Record<TicketState, string> = {
+  OPEN: 'Mark in progress',
+  IN_PROGRESS: 'Resolve',
+  RESOLVED: 'Reopen',
+  CLOSED: '',
+};
 
 export function TicketDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -114,7 +126,68 @@ export function TicketDetailPage() {
           )}
       </section>
 
+      {canTransitionTicket(auth.user, ticket.state) && (
+        <TransitionControls ticketId={ticketId} state={ticket.state} />
+      )}
+
       {canComment && <CommentForm ticketId={ticketId} />}
+    </section>
+  );
+}
+
+function canTransitionTicket(user: User | null, state: TicketState): boolean {
+  if (!user || user.role !== 'TECHNICIAN') {
+    return false;
+  }
+  return state !== 'CLOSED';
+}
+
+function nextAllowedState(state: TicketState): TicketState | null {
+  if (state === 'OPEN') return 'IN_PROGRESS';
+  if (state === 'IN_PROGRESS') return 'RESOLVED';
+  if (state === 'RESOLVED') return 'IN_PROGRESS';
+  return null;
+}
+
+function TransitionControls({ ticketId, state }: { ticketId: number; state: TicketState }) {
+  const queryClient = useQueryClient();
+  const [serverError, setServerError] = useState<string | null>(null);
+  const target = nextAllowedState(state);
+  const detailQueryKey = ['tickets', ticketId] as const;
+
+  const transitionMutation = useMutation({
+    mutationFn: (next: TicketState) => apiClient.updateTicket(ticketId, { state: next }),
+    onSuccess: () => {
+      setServerError(null);
+      void queryClient.invalidateQueries({ queryKey: detailQueryKey });
+    },
+  });
+
+  const submitting = transitionMutation.isPending;
+  const error =
+    serverError ??
+    (transitionMutation.isError
+      ? describeApiError(transitionMutation.error, 'Unable to transition the ticket.')
+      : null);
+
+  if (!target) {
+    return null;
+  }
+
+  return (
+    <section className="ticket-detail-transitions">
+      <button
+        type="button"
+        className="ticket-detail-transition-button"
+        disabled={submitting}
+        onClick={() => {
+          setServerError(null);
+          transitionMutation.mutate(target);
+        }}
+      >
+        {submitting ? 'Working…' : NEXT_STATE_LABEL[state]}
+      </button>
+      {error && <p role="alert" className="ticket-detail-transition-error">{error}</p>}
     </section>
   );
 }

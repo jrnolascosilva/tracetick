@@ -113,6 +113,13 @@ export interface CreateTicketRequest {
   tags: Tag[];
 }
 
+export interface UpdateTicketRequest {
+  state?: TicketState;
+  severity?: Severity;
+  assigneeUserId?: number | null;
+  unassign?: boolean;
+}
+
 export interface IngestionConfiguration {
   id: number;
   name: string;
