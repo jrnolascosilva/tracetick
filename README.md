@@ -12,7 +12,7 @@ IngestionConfiguration, Event).
 - **Frontend** — Vite + React 19 + TypeScript, with React Router and TanStack React Query.
 - **CI** — GitHub Actions, on every PR and push to `main`.
 
-The five v1 architectural decisions are recorded as ADRs under
+The v1 architectural decisions are recorded as ADRs under
 [`docs/architecture/adrs/`](./docs/architecture/adrs/).
 
 ## Repository layout
@@ -88,6 +88,14 @@ curl http://localhost:8080/actuator/health
 # {"status":"UP","groups":["liveness","readiness"]}
 ```
 
+The HTTP API is auto-documented via springdoc-openapi:
+
+- **OpenAPI 3 JSON** — `http://localhost:8080/v3/api-docs`
+- **Swagger UI** — `http://localhost:8080/swagger-ui.html`
+
+Both endpoints are reachable without auth in dev, since they only expose the API surface —
+not data. Locking them down is a separate ticket (see ADR-0007).
+
 Liquibase runs at startup and creates the `databasechangelog` and `databasechangeloglock`
 tables. No entity tables exist yet — those land in T4.
 
@@ -157,6 +165,7 @@ Tickets are tracked as GitHub issues. The current plan lives in
 - T9 — IngestionConfiguration backend.
 - T10 — Webhook ingest (HMAC + dedup + extraction).
 - T11 — Ingestion admin UI.
+- T14 — OpenAPI documentation (springdoc).
 
 ## License
 
