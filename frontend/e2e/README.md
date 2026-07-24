@@ -36,16 +36,23 @@ by the e2e run — both stacks can be up simultaneously without interfering.
 
 Per-run isolation is automatic — no manual step:
 
-1. `globalSetup` runs `docker compose -f docker-compose.e2e.yml down -v`
-   *before* the webServer comes up. This drops any leftover volume from a
-   previous run that crashed before reaching teardown.
-2. `webServer` brings the e2e Postgres up against a fresh, empty volume.
-   The backend's `SPRING_DATASOURCE_URL` is overridden by
-   `frontend/playwright.config.ts` to point at `localhost:5433` for the
-   duration of the suite.
-3. `globalTeardown` runs `docker compose -f docker-compose.e2e.yml down -v`
+1. The Postgres `webServer` entry's command chains
+   `docker compose -f docker-compose.e2e.yml down -v --remove-orphans; docker compose -f docker-compose.e2e.yml up postgres`.
+   The `down -v` is idempotent (no-op when nothing exists), so the
+   webServer always brings Postgres up against a fresh, empty volume —
+   even if a previous run crashed before reaching teardown.
+   Pre-clean is intentionally **not** done in `globalSetup` because
+   Playwright runs `globalSetup` concurrently with the `webServer` array,
+   and a pre-clean there would race with the backend booting and drop
+   the database out from under the already-connected JDBC pool.
+2. The backend `webServer` entry overrides `SPRING_DATASOURCE_URL` to
+   point at `localhost:5433` for the duration of the suite, so it talks
+   to the e2e Postgres and never the developer's local dev DB on 5432.
+3. `globalTeardown` runs `docker compose -f docker-compose.e2e.yml down -v --remove-orphans`
    after the suite, dropping the per-run volume so the next
-   `npm run test:e2e` starts on an empty DB.
+   `npm run test:e2e` starts on an empty DB. Teardown failures are
+   logged as warnings rather than thrown, so a green suite result is
+   not masked by a teardown glitch.
 
 Two consecutive `npm run test:e2e` invocations in the same shell session
 each see an empty `tracetick` database at startup.
