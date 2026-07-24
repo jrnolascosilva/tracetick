@@ -5,7 +5,7 @@ import { defineConfig, devices } from '@playwright/test';
  *
  * Brings the full stack up via the `webServer` array (supported since Playwright
  * 1.30 — verified against @playwright/test 1.61):
- *   1. Postgres (port 5432) — `docker compose up -d postgres`
+ *   1. Postgres (port 5432) — `docker compose up postgres` from the repo root
  *   2. Backend (Spring Boot, port 8080) — `./gradlew bootRun` from backend/
  *   3. Frontend (Vite dev, port 5173) — `npm run dev` from frontend/
  *
