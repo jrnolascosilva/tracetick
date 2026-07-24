@@ -5,7 +5,7 @@ import { defineConfig, devices } from '@playwright/test';
  *
  * Brings the full stack up via the `webServer` array (supported since Playwright
  * 1.30 — verified against @playwright/test 1.61):
- *   1. Postgres (port 5432) — `docker compose up postgres` from the repo root
+ *   1. E2E Postgres (host port 5433) — `docker compose -f docker-compose.e2e.yml up postgres`
  *   2. Backend (Spring Boot, port 8080) — `./gradlew bootRun` from backend/
  *   3. Frontend (Vite dev, port 5173) — `npm run dev` from frontend/
  *
@@ -17,10 +17,15 @@ import { defineConfig, devices } from '@playwright/test';
  * (defaults `admin@tracetick.local` / `changeme`).
  *
  * Test isolation strategy:
- *   - One happy-path test, so per-test isolation is unnecessary.
- *   - For a fully clean run between manual invocations, reset with
- *     `docker compose down -v && docker compose up -d postgres` from the repo
- *     root. See `frontend/e2e/README.md`.
+ *   - The e2e Postgres lives in its own dedicated compose file
+ *     (`docker-compose.e2e.yml`) on host port 5433 with a dedicated volume
+ *     (`tracetick-e2e-postgres-data`). The developer's local dev DB on port
+ *     5432 is never touched.
+ *   - `globalSetup` pre-cleans any leftover container/volume from a previous
+ *     crash that did not reach teardown.
+ *   - `globalTeardown` always runs `docker compose ... down -v` so the next
+ *     run starts on an empty DB. Two consecutive `npm run test:e2e`
+ *     invocations each see a fresh database.
  */
 export default defineConfig({
   testDir: './e2e',
@@ -34,6 +39,7 @@ export default defineConfig({
     timeout: 10_000,
   },
   globalSetup: './e2e/global-setup.ts',
+  globalTeardown: './e2e/global-teardown.ts',
   use: {
     baseURL: 'http://localhost:5173',
     trace: 'retain-on-failure',
@@ -48,22 +54,30 @@ export default defineConfig({
   ],
   webServer: [
     {
-      // Bring Postgres up before the backend tries to connect. We run the
-      // compose command WITHOUT `-d` so the process stays in the foreground;
-      // Playwright keeps the process alive while it polls port 5432, then
-      // SIGTERMs it after the tests. `reuseExistingServer` lets a developer
-      // who already ran `docker compose up -d postgres` locally skip the boot.
-      command: 'docker compose up postgres',
-      port: 5432,
-      reuseExistingServer: true,
+      // Bring the e2e Postgres up before the backend tries to connect. The
+      // command chain `down -v` first to drop any leftover container/volume
+      // from a previous run that crashed before reaching teardown, then
+      // `up postgres` starts a fresh container against an empty volume. The
+      // compose command stays in the foreground without `-d`, so Playwright
+      // keeps the process alive while it polls host port 5433, then SIGTERMs
+      // it after the tests. `reuseExistingServer: false` matters — if port
+      // 5433 is already listening for another reason we'd otherwise attach
+      // to a stale container whose volume still holds the previous run's
+      // data. Surface that as a real failure instead.
+      command:
+        'docker compose -f docker-compose.e2e.yml down -v --remove-orphans; ' +
+        'docker compose -f docker-compose.e2e.yml up postgres',
+      port: 5433,
+      reuseExistingServer: false,
       timeout: 120_000,
       cwd: '..',
     },
     {
       // Spring Boot via Gradle. The health endpoint returns 200 once the
-      // application context is up and Liquibase + the bootstrap admin seed have
-      // finished. We don't gate on `db` health specifically — the readiness
-      // probe goes 200 once the JDBC pool can hand out a connection.
+      // application context is up and Liquibase + the bootstrap admin seed
+      // have finished. We override SPRING_DATASOURCE_URL so the backend
+      // points at the e2e Postgres on port 5433, not the developer's port
+      // 5432 dev DB.
       command: './gradlew bootRun',
       url: 'http://localhost:8080/actuator/health',
       reuseExistingServer: false,
@@ -71,6 +85,11 @@ export default defineConfig({
       cwd: '../backend',
       stdout: 'pipe',
       stderr: 'pipe',
+      env: {
+        SPRING_DATASOURCE_URL: 'jdbc:postgresql://localhost:5433/tracetick',
+        SPRING_DATASOURCE_USERNAME: 'tracetick',
+        SPRING_DATASOURCE_PASSWORD: 'tracetick',
+      },
     },
     {
       // Vite dev server. The /api proxy is configured to forward to

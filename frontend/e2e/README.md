@@ -19,19 +19,44 @@ which exercises:
 4. transition the Ticket `OPEN → IN_PROGRESS` via the UI
 5. transition the Ticket `IN_PROGRESS → RESOLVED` via the UI
 
-The stack (Postgres + Spring Boot backend + Vite dev server) is brought up by
-Playwright's `webServer` array — see `frontend/playwright.config.ts`. The
+The stack (E2E Postgres + Spring Boot backend + Vite dev server) is brought up
+by Playwright's `webServer` array — see `frontend/playwright.config.ts`. The
 backend's `BootstrapInitializer` (`CommandLineRunner`) seeds the single
 `Customer` row and the admin `User` on first boot, so no manual SQL seed is
 required.
 
+## Test isolation — fresh DB per run
+
+The e2e Postgres lives in its own dedicated compose file
+(`docker-compose.e2e.yml` at the repo root) with its own container
+(`tracetick-e2e-postgres`), its own host port (`5433`), and its own named
+volume (`tracetick-e2e-postgres-data`). The developer's local dev DB on host
+port 5432 (`docker-compose.yml`'s `tracetick-postgres`) is **never touched**
+by the e2e run — both stacks can be up simultaneously without interfering.
+
+Per-run isolation is automatic — no manual step:
+
+1. `globalSetup` runs `docker compose -f docker-compose.e2e.yml down -v`
+   *before* the webServer comes up. This drops any leftover volume from a
+   previous run that crashed before reaching teardown.
+2. `webServer` brings the e2e Postgres up against a fresh, empty volume.
+   The backend's `SPRING_DATASOURCE_URL` is overridden by
+   `frontend/playwright.config.ts` to point at `localhost:5433` for the
+   duration of the suite.
+3. `globalTeardown` runs `docker compose -f docker-compose.e2e.yml down -v`
+   after the suite, dropping the per-run volume so the next
+   `npm run test:e2e` starts on an empty DB.
+
+Two consecutive `npm run test:e2e` invocations in the same shell session
+each see an empty `tracetick` database at startup.
+
 ## Bootstrap admin credentials (dev only)
 
-| Field    | Value                  |
-| -------- | ---------------------- |
+| Field    | Value                   |
+| -------- | ----------------------- |
 | email    | `admin@tracetick.local` |
-| password | `changeme`             |
-| role     | `TECHNICIAN`           |
+| password | `changeme`              |
+| role     | `TECHNICIAN`            |
 
 Override via environment variables when launching the backend:
 
@@ -44,7 +69,7 @@ them.
 ## Prereqs
 
 - Node.js 20+ (frontend dev server + Playwright runner)
-- Docker (for `postgres` service in `docker-compose.yml`)
+- Docker (for the e2e Postgres service in `docker-compose.e2e.yml`)
 - Java 21 (Spring Boot backend via Gradle)
 
 ## First-time setup
@@ -62,38 +87,29 @@ In restricted environments where `--with-deps` cannot install system packages:
 npx playwright install chromium
 ```
 
-## Resetting the database between runs
-
-The single happy-path spec does not require a DB reset between runs — the
-backend's `BootstrapInitializer` is idempotent (it only inserts the admin user
-if missing), and the spec creates a fresh Ticket each run.
-
-For a fully clean state (e.g., after schema changes or to wipe manually-created
-data), reset Postgres from the repo root:
-
-```
-docker compose down -v
-docker compose up -d postgres
-```
-
-This drops the `tracetick-postgres-data` named volume and recreates an empty
-`tracetick` database. The backend's Liquibase changelogs re-apply on the next
-`bootRun`, and the bootstrap admin is recreated.
-
 ## Configuration overrides
 
-The global setup and the spec use these environment variables (all optional):
+`frontend/e2e/test-config.ts` is the single source of truth for these
+defaults. Both `global-setup.ts` (which logs in as a smoke check) and
+`happy-path.spec.ts` (which drives the login form) import from it, so they
+cannot drift apart.
 
-- `E2E_API_BASE` — API base URL for the smoke-check login. Defaults to
+- `E2E_API_BASE` — API base URL used by the smoke-check login. Defaults to
   `http://localhost:8080/api/v1`.
-- `E2E_ADMIN_EMAIL` — admin email for the smoke-check login. Defaults to
-  `admin@tracetick.local`.
-- `E2E_ADMIN_PASSWORD` — admin password for the smoke-check login. Defaults to
-  `changeme`.
+- `E2E_ADMIN_EMAIL` — admin email used by both the smoke check and the spec.
+  Defaults to `admin@tracetick.local`.
+- `E2E_ADMIN_PASSWORD` — admin password used by both the smoke check and the
+  spec. Defaults to `changeme`.
 - `SKIP_E2E_IN_SANDBOX` — if set to `1`, `global-setup.ts` skips the admin
   login smoke check (useful in sandboxes where the backend cannot be reached).
   The spec itself will still attempt to drive the UI and fail if the stack is
   not actually running.
+
+Setting `E2E_ADMIN_EMAIL` and `E2E_ADMIN_PASSWORD` (alongside the matching
+`TRACETICK_BOOTSTRAP_ADMIN_EMAIL` / `TRACETICK_BOOTSTRAP_ADMIN_PASSWORD` env
+vars when starting the backend) lets the smoke check and the spec agree on
+non-default credentials — without those overrides, the smoke check would
+succeed but the browser login in the spec would silently fail.
 
 ## Running a single spec or filtering
 
@@ -118,8 +134,8 @@ CI should run the test against a fresh Docker Compose stack. Recommended
 order:
 
 ```
-docker compose up -d postgres
-./backend/gradlew bootRun &    # or build an image
+docker compose -f docker-compose.e2e.yml up -d postgres
+cd backend && ./gradlew bootRun &
 cd frontend && npm run dev &
 cd frontend && npm run test:e2e
 ```
