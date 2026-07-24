@@ -14,6 +14,7 @@ import type {
   TicketDetail,
   TicketEvent,
   UpdateIngestionConfigurationRequest,
+  UpdateTicketRequest,
   UpdateUserRequest,
   User,
 } from '@/lib/types';
@@ -142,6 +143,12 @@ export const apiClient = {
     return request<TicketEvent>(`/tickets/${ticketId}/comments`, {
       method: 'POST',
       body: JSON.stringify({ body }),
+    });
+  },
+  updateTicket(id: number, body: UpdateTicketRequest): Promise<Ticket> {
+    return request<Ticket>(`/tickets/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
     });
   },
   listIngestionConfigurations(): Promise<IngestionConfiguration[]> {

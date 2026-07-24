@@ -76,6 +76,8 @@ backend/build/reports/
 backend/build/test-results/
 backend/build/reports/tests/test/**/*.html
 frontend/coverage/
+frontend/test-results/
+frontend/playwright-report/
 
 # Allow the Vite entry HTML (excluded by the broader *.html pattern above)
 !frontend/index.html
